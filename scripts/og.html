@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700&family=Lobster+Two:wght@700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      html,
+      body {
+        margin: 0;
+        width: 1200px;
+        height: 630px;
+        overflow: hidden;
+        background: #f4f1ea;
+        color: #111111;
+        font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+      }
+      .frame {
+        box-sizing: border-box;
+        display: grid;
+        grid-template-columns: 220px 1fr;
+        gap: 48px;
+        align-items: center;
+        width: 1200px;
+        height: 630px;
+        padding: 72px 80px;
+        background: linear-gradient(#ffffff 0%, #f7f6f3 42%, #d8d4cb 100%);
+      }
+      img {
+        display: block;
+        width: 168px;
+        height: auto;
+      }
+      .copy {
+        display: grid;
+        gap: 18px;
+      }
+      .name {
+        margin: 0;
+        font-family: "Lobster Two", "Segoe Script", cursive;
+        font-size: 72px;
+        font-weight: 700;
+        letter-spacing: 0;
+        line-height: 0.9;
+      }
+      h1 {
+        margin: 0;
+        max-width: 16ch;
+        font-size: 42px;
+        font-weight: 700;
+        letter-spacing: -0.045em;
+        line-height: 1.12;
+      }
+      p {
+        margin: 0;
+        color: #525252;
+        font-size: 22px;
+        font-weight: 500;
+        letter-spacing: -0.02em;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="frame">
+      <img src="../public/logo.svg" alt="" />
+      <div class="copy">
+        <p class="name">pngn</p>
+        <h1>Change text on any image</h1>
+        <p>Free in your browser. No account. No upload.</p>
+      </div>
+    </div>
+  </body>
+</html>

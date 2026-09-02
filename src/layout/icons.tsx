@@ -145,6 +145,26 @@ export const CheckIcon = ({ size = 28 }: IconProps) => (
   </svg>
 )
 
+export const PipetteIcon = ({ size = 16 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="m2 22 1-1h3l9.09-9.09" />
+    <path d="M4 20v-3l9.09-9.09" />
+    <path d="m15 5 5 5" />
+    <path d="m18.5 2.5 3 3-1.5 1.5a2.12 2.12 0 0 1-3 0L15 5Z" />
+    <path d="m14.5 8.5 3 3" />
+  </svg>
+)
+
 export const HelpCircleIcon = ({ size = 14 }: IconProps) => (
   <svg
     width={size}

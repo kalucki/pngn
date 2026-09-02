@@ -33,6 +33,7 @@ import { RegionSelector } from "./editor/RegionSelector";
 import { TextToolbar } from "./editor/TextToolbar";
 import { FlowSteps } from "./layout/FlowSteps";
 import { HintTooltip } from "./layout/HintTooltip";
+import { LandingSeo } from "./layout/LandingSeo";
 import { LandingStage } from "./layout/LandingStage";
 import {
   AlertCircleIcon,
@@ -789,6 +790,7 @@ export const App = () => {
               />
             </label>
           </LandingStage>
+          <LandingSeo />
         </>
       ) : (
         <div className="editor-layout">

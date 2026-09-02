@@ -44,11 +44,11 @@ the browser.
 
 Choose a fill from the Reconstruction control:
 
-- **Auto** — instant color or gradient fill on flat backgrounds; LaMa on photos
+- **Auto** - instant color or gradient fill on flat backgrounds; LaMa on photos
   and busy textures.
-- **MI-GAN** (`migan_pipeline_v2.onnx`, ~28 MB, MIT) — faster neural fill. Best
+- **MI-GAN** (`migan_pipeline_v2.onnx`, ~28 MB, MIT) - faster neural fill. Best
   for small text and simple backgrounds.
-- **LaMa** (`lama_fp32.onnx`, ~200 MB, Apache-2.0) — slower, more detailed fill
+- **LaMa** (`lama_fp32.onnx`, ~200 MB, Apache-2.0) - slower, more detailed fill
   for large text, photos, or busy textures.
 
 Both neural models run fully client-side via ONNX Runtime Web (WebGPU, WASM

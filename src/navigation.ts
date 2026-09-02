@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
+import { EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH } from './paths'
 
-export const HOW_IT_WORKS_PATH = '/how-it-works'
-export const EXPORT_PATH = '/export'
+export { EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH }
 
 export const normalizePath = (path: string) => path.replace(/\/+$/, '') || '/'
 

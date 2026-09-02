@@ -1,11 +1,19 @@
-import { createReadStream, existsSync, statSync } from 'node:fs'
+import { createReadStream, existsSync, statSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import react from '@vitejs/plugin-react'
-import { defineConfig, type Plugin, type PreviewServer, type ViteDevServer } from 'vite'
+import {
+  defineConfig,
+  loadEnv,
+  type Plugin,
+  type PreviewServer,
+  type ViteDevServer,
+} from 'vite'
+import { llmsTxt, robotsTxt, sitemapXml } from './src/seo/staticFiles.ts'
 
 const publicDir = join(fileURLToPath(new URL('.', import.meta.url)), 'public')
+const distDir = join(fileURLToPath(new URL('.', import.meta.url)), 'dist')
 
 const parseRange = (header: string | undefined, size: number) => {
   if (!header) return null
@@ -110,24 +118,69 @@ const serveModelFiles = (): Plugin => {
   }
 }
 
-export default defineConfig({
-  plugins: [react(), serveModelFiles()],
-  worker: {
-    format: 'es',
-  },
-  server: {
-    headers: {
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-      'Cross-Origin-Opener-Policy': 'same-origin',
+const seoFiles = (origin: string): Plugin => {
+  const bodyFor = (url: string) => {
+    if (url === '/robots.txt') {
+      return { type: 'text/plain; charset=utf-8', body: robotsTxt(origin) }
+    }
+    if (url === '/sitemap.xml') {
+      return { type: 'application/xml; charset=utf-8', body: sitemapXml(origin) }
+    }
+    if (url === '/llms.txt') {
+      return { type: 'text/plain; charset=utf-8', body: llmsTxt(origin) }
+    }
+    return null
+  }
+
+  const attach = (server: ViteDevServer | PreviewServer) => {
+    server.middlewares.use((req, res, next) => {
+      const url = req.url?.split('?')[0] ?? ''
+      const file = bodyFor(url)
+      if (!file) {
+        next()
+        return
+      }
+      res.statusCode = 200
+      res.setHeader('Content-Type', file.type)
+      res.end(file.body)
+    })
+  }
+
+  return {
+    name: 'seo-static-files',
+    configureServer: attach,
+    configurePreviewServer: attach,
+    closeBundle() {
+      writeFileSync(join(distDir, 'robots.txt'), robotsTxt(origin))
+      writeFileSync(join(distDir, 'sitemap.xml'), sitemapXml(origin))
+      writeFileSync(join(distDir, 'llms.txt'), llmsTxt(origin))
     },
-    watch: {
-      ignored: ['**/public/models/inpaint/**/*.onnx'],
+  }
+}
+
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  const siteOrigin = (env.VITE_SITE_ORIGIN ?? '').replace(/\/+$/, '')
+
+  return {
+    plugins: [react(), serveModelFiles(), seoFiles(siteOrigin)],
+    worker: {
+      format: 'es',
     },
-  },
-  preview: {
-    headers: {
-      'Cross-Origin-Embedder-Policy': 'require-corp',
-      'Cross-Origin-Opener-Policy': 'same-origin',
+    server: {
+      headers: {
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+        'Cross-Origin-Opener-Policy': 'same-origin',
+      },
+      watch: {
+        ignored: ['**/public/models/inpaint/**/*.onnx'],
+      },
     },
-  },
+    preview: {
+      headers: {
+        'Cross-Origin-Embedder-Policy': 'require-corp',
+        'Cross-Origin-Opener-Policy': 'same-origin',
+      },
+    },
+  }
 })

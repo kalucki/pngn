@@ -128,38 +128,40 @@ export const HeroTitle = ({ text }: HeroTitleProps) => {
   }, []);
 
   return (
-    <h1
-      className="hero-title"
-      style={{
-        fontFamily: heroFontStack(activeFont),
-        fontWeight: activeFont.weight,
-        letterSpacing: activeFont.letterSpacing,
-      }}
-    >
-      <span className="hero-title-tag" key={`tag-${fontIndex}`}>
+    <div className="hero-title">
+      <span className="hero-title-tag" aria-hidden="true" key={`tag-${fontIndex}`}>
         {activeFont.family}
       </span>
-      <span className="hero-title-line" aria-hidden="true">
-        <span className="hero-title-words">
-          {words.map((word, wordIndex) => (
-            <Fragment key={`${shuffleKey}-${word.key}`}>
-              {wordIndex > 0 ? " " : null}
-              <span className="hero-word">
-                {word.chars.map(({ char, index }) => (
-                  <span
-                    className="hero-char"
-                    key={index}
-                    style={{ ["--i" as string]: index }}
-                  >
-                    {char}
-                  </span>
-                ))}
-              </span>
-            </Fragment>
-          ))}
+      <h1
+        className="hero-title-heading"
+        style={{
+          fontFamily: heroFontStack(activeFont),
+          fontWeight: activeFont.weight,
+          letterSpacing: activeFont.letterSpacing,
+        }}
+      >
+        <span className="hero-title-line" aria-hidden="true">
+          <span className="hero-title-words">
+            {words.map((word, wordIndex) => (
+              <Fragment key={`${shuffleKey}-${word.key}`}>
+                {wordIndex > 0 ? " " : null}
+                <span className="hero-word">
+                  {word.chars.map(({ char, index }) => (
+                    <span
+                      className="hero-char"
+                      key={index}
+                      style={{ ["--i" as string]: index }}
+                    >
+                      {char}
+                    </span>
+                  ))}
+                </span>
+              </Fragment>
+            ))}
+          </span>
         </span>
-      </span>
-      <span className="visually-hidden">{text}</span>
-    </h1>
+        <span className="visually-hidden">{text}</span>
+      </h1>
+    </div>
   );
 };

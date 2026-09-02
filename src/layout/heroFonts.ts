@@ -21,7 +21,7 @@ export type HeroFont = {
 
 /**
  * The typefaces the hero title cycles through. Add, remove, or reorder
- * entries here — everything else (loading, animation, timing) adapts.
+ * entries here - everything else (loading, animation, timing) adapts.
  */
 export const HERO_FONTS: HeroFont[] = [
   {

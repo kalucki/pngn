@@ -896,6 +896,10 @@ output {
   perspective: 720px;
 }
 
+.hero-title-heading {
+  margin: 0;
+}
+
 .hero-title-tag {
   display: inline-block;
   font-family: "Space Mono", ui-monospace, "SFMono-Regular", monospace;
@@ -1178,6 +1182,159 @@ html:has(.app-root:not([hidden]) .app-shell.is-landing) .site-nav {
   font-weight: 500;
   letter-spacing: -0.01em;
   text-align: center;
+}
+
+.landing-seo {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 1rem;
+  width: min(42rem, 100%);
+  margin: 0.5rem auto 0;
+  padding: 0 0 2rem;
+}
+
+.landing-seo-block {
+  padding: 1.25rem 1.35rem 1.15rem;
+  border-radius: 0.85rem;
+  background: rgb(255 255 255 / 0.78);
+  border: 1px solid rgb(0 0 0 / 0.06);
+}
+
+.landing-seo-block h2 {
+  margin: 0 0 0.65rem;
+  color: var(--text);
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.landing-seo-block p,
+.landing-seo-block li,
+.landing-seo-block dd {
+  margin: 0 0 0.75rem;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  line-height: 1.65;
+}
+
+.landing-seo-block p:last-child,
+.landing-seo-block li:last-child {
+  margin-bottom: 0;
+}
+
+.landing-seo-steps,
+.landing-seo-uses {
+  margin: 0;
+  padding-inline-start: 1.2rem;
+}
+
+.landing-seo-steps li,
+.landing-seo-uses li {
+  margin-bottom: 0.55rem;
+}
+
+.landing-seo-faq {
+  margin: 0;
+}
+
+.landing-seo-faq-item {
+  margin: 0 0 1rem;
+}
+
+.landing-seo-faq-item:last-of-type {
+  margin-bottom: 0.35rem;
+}
+
+.landing-seo-faq dt {
+  margin: 0 0 0.3rem;
+  color: var(--text);
+  font-size: 0.98rem;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+
+.landing-seo-faq dd {
+  margin: 0;
+}
+
+.landing-seo-more {
+  margin: 0.85rem 0 0;
+}
+
+.landing-seo-more a {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.faq-page {
+  width: min(46rem, calc(100% - 2rem));
+}
+
+.faq-page {
+  width: min(46rem, calc(100% - 2rem));
+}
+
+.faq-list {
+  margin: 0;
+}
+
+.faq-item {
+  margin: 0 0 1.35rem;
+  padding: 1.05rem 1.15rem 1rem;
+  border-radius: 0.75rem;
+  background: var(--bg-raised);
+}
+
+.faq-item dt {
+  margin: 0;
+}
+
+.faq-item h3 {
+  margin: 0 0 0.45rem;
+  color: var(--text);
+  font-size: 1.02rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.faq-item dd {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.96rem;
+  line-height: 1.65;
+}
+
+.faq-cta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1rem;
+  margin: 2.2rem 0 0;
+  color: var(--text);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.faq-cta-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+  padding: 0.55rem 0.9rem;
+  text-decoration: none;
+}
+
+.faq-cta-link:hover {
+  background: #262626;
+}
+
+html.js #seo-prerender {
+  display: none;
 }
 
 .status-card {
@@ -1550,6 +1707,62 @@ html:has(.app-root:not([hidden]) .app-shell.is-landing) .site-nav {
   padding: 0.7rem;
 }
 
+.color-swatch-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+.color-swatch-hex {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.color-swatch-hex .mantine-Input-input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+}
+
+.color-swatch-eyedropper {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 2.05rem;
+  align-items: center;
+  justify-content: center;
+  width: 2.05rem;
+  height: 2.05rem;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.4rem;
+  background: var(--bg-raised);
+  color: var(--text-muted);
+}
+
+.color-swatch-eyedropper:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-muted);
+  color: var(--text);
+}
+
+.color-swatch-eyedropper svg {
+  pointer-events: none;
+}
+
+.color-swatch-native {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
 .stroke-controls {
   display: flex;
   align-items: center;
@@ -1794,6 +2007,14 @@ html:has(.app-root:not([hidden]) .app-shell.is-landing) .site-nav {
   .site-nav-inner {
     width: 100%;
     padding: 0 1.25rem;
+  }
+
+  .site-nav-end {
+    gap: 0.7rem;
+  }
+
+  .landing-seo {
+    width: min(100%, 42rem);
   }
 
   .docs-page {

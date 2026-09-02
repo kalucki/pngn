@@ -1,5 +1,5 @@
 import { useLocale } from '../i18n/useLocale'
-import { HOW_IT_WORKS_PATH, usePath } from '../navigation'
+import { FAQ_PATH, HOW_IT_WORKS_PATH, usePath } from '../navigation'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { Link } from './Link'
 
@@ -7,6 +7,7 @@ export const NavBar = () => {
   const path = usePath()
   const { t } = useLocale()
   const onHowItWorks = path === HOW_IT_WORKS_PATH
+  const onFaq = path === FAQ_PATH
 
   return (
     <nav className="site-nav" aria-label={t('nav.primary')}>
@@ -22,6 +23,13 @@ export const NavBar = () => {
           <span className="site-nav-name">pngn</span>
         </Link>
         <div className="site-nav-end">
+          <Link
+            to={FAQ_PATH}
+            className={`site-nav-link${onFaq ? ' active' : ''}`}
+            aria-current={onFaq ? 'page' : undefined}
+          >
+            {t('nav.faq')}
+          </Link>
           <Link
             to={HOW_IT_WORKS_PATH}
             className={`site-nav-link${onHowItWorks ? ' active' : ''}`}

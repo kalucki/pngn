@@ -1,4 +1,5 @@
 import type { Locale } from "./locales";
+import { seoAr, seoEn, seoEs, seoPcm, seoPl, seoZh } from "./seoMessages";
 
 export const en = {
   "nav.primary": "Primary",
@@ -6,8 +7,8 @@ export const en = {
   "nav.language": "Language",
 
   "title.home": "Change text on any image",
-  "title.howItWorks": "Credits — pngn",
-  "title.export": "Export — pngn",
+  "title.howItWorks": "Credits - pngn",
+  "title.export": "Export - pngn",
 
   "flow.aria": "How to edit text on an image",
   "flow.upload": "Upload an image",
@@ -95,6 +96,8 @@ export const en = {
   "toolbar.size": "Size",
   "toolbar.weight": "Weight",
   "toolbar.color": "Color",
+  "toolbar.hex": "Hex color",
+  "toolbar.eyedropper": "Pick color from screen",
   "toolbar.stroke": "Stroke",
   "toolbar.strokeWidth": "Stroke width",
   "toolbar.opacity": "Opacity",
@@ -153,6 +156,7 @@ export const en = {
   "docs.lama.github": "LaMa on GitHub",
   "docs.lama.paper": "Research paper",
   "docs.linkExternal": "opens in a new tab",
+  ...seoEn,
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -166,8 +170,8 @@ const es = catalog({
   "nav.language": "Idioma",
 
   "title.home": "Cambia el texto de cualquier imagen",
-  "title.howItWorks": "Créditos — pngn",
-  "title.export": "Exportar — pngn",
+  "title.howItWorks": "Créditos - pngn",
+  "title.export": "Exportar - pngn",
 
   "flow.aria": "Cómo editar texto en una imagen",
   "flow.upload": "Sube una imagen",
@@ -258,6 +262,8 @@ const es = catalog({
   "toolbar.size": "Tamaño",
   "toolbar.weight": "Grosor",
   "toolbar.color": "Color",
+  "toolbar.hex": "Color hexadecimal",
+  "toolbar.eyedropper": "Elegir color de la pantalla",
   "toolbar.stroke": "Contorno",
   "toolbar.strokeWidth": "Grosor del contorno",
   "toolbar.opacity": "Opacidad",
@@ -316,6 +322,7 @@ const es = catalog({
   "docs.lama.github": "LaMa en GitHub",
   "docs.lama.paper": "Artículo de investigación",
   "docs.linkExternal": "se abre en una pestaña nueva",
+  ...seoEs,
 });
 
 const pl = catalog({
@@ -324,8 +331,8 @@ const pl = catalog({
   "nav.language": "Język",
 
   "title.home": "Zmień tekst na dowolnym obrazie",
-  "title.howItWorks": "Podziękowania — pngn",
-  "title.export": "Eksport — pngn",
+  "title.howItWorks": "Podziękowania - pngn",
+  "title.export": "Eksport - pngn",
 
   "flow.aria": "Jak edytować tekst na obrazie",
   "flow.upload": "Wczytaj obraz",
@@ -416,6 +423,8 @@ const pl = catalog({
   "toolbar.size": "Rozmiar",
   "toolbar.weight": "Grubość",
   "toolbar.color": "Kolor",
+  "toolbar.hex": "Kolor hex",
+  "toolbar.eyedropper": "Pobierz kolor z ekranu",
   "toolbar.stroke": "Obrys",
   "toolbar.strokeWidth": "Grubość obrysu",
   "toolbar.opacity": "Krycie",
@@ -462,7 +471,7 @@ const pl = catalog({
   "docs.migan.authors":
     "Andranik Sargsyan, Shant Navasardyan, Xingqian Xu i Humphrey Shi - Picsart AI Research",
   "docs.migan.p1":
-    "MI-GAN to zwarty model inpaintingu stworzony, by szybko odtwarzać brakujące obszary — dlatego może działać w przeglądarce podczas edycji.",
+    "MI-GAN to zwarty model inpaintingu stworzony, by szybko odtwarzać brakujące obszary - dlatego może działać w przeglądarce podczas edycji.",
   "docs.migan.github": "MI-GAN na GitHubie",
   "docs.migan.paper": "Artykuł naukowy",
   "docs.lama": "LaMa",
@@ -473,6 +482,7 @@ const pl = catalog({
   "docs.lama.github": "LaMa na GitHubie",
   "docs.lama.paper": "Artykuł naukowy",
   "docs.linkExternal": "otwiera się w nowej karcie",
+  ...seoPl,
 });
 
 const zh = catalog({
@@ -481,8 +491,8 @@ const zh = catalog({
   "nav.language": "语言",
 
   "title.home": "修改任意图片上的文字",
-  "title.howItWorks": "致谢 — pngn",
-  "title.export": "导出 — pngn",
+  "title.howItWorks": "致谢 - pngn",
+  "title.export": "导出 - pngn",
 
   "flow.aria": "如何编辑图片上的文字",
   "flow.upload": "上传图片",
@@ -562,6 +572,8 @@ const zh = catalog({
   "toolbar.size": "大小",
   "toolbar.weight": "字重",
   "toolbar.color": "颜色",
+  "toolbar.hex": "十六进制颜色",
+  "toolbar.eyedropper": "从屏幕取色",
   "toolbar.stroke": "描边",
   "toolbar.strokeWidth": "描边粗细",
   "toolbar.opacity": "不透明度",
@@ -618,6 +630,7 @@ const zh = catalog({
   "docs.lama.github": "GitHub 上的 LaMa",
   "docs.lama.paper": "研究论文",
   "docs.linkExternal": "在新标签页打开",
+  ...seoZh,
 });
 
 const pcm = catalog({
@@ -626,8 +639,8 @@ const pcm = catalog({
   "nav.language": "Language",
 
   "title.home": "Change writing wey dey for any picture",
-  "title.howItWorks": "Credits — pngn",
-  "title.export": "Export — pngn",
+  "title.howItWorks": "Credits - pngn",
+  "title.export": "Export - pngn",
 
   "flow.aria": "How to change writing for picture",
   "flow.upload": "Upload picture",
@@ -716,6 +729,8 @@ const pcm = catalog({
   "toolbar.size": "Size",
   "toolbar.weight": "Weight",
   "toolbar.color": "Color",
+  "toolbar.hex": "Hex color",
+  "toolbar.eyedropper": "Pick color from di screen",
   "toolbar.stroke": "Outline",
   "toolbar.strokeWidth": "Outline thickness",
   "toolbar.opacity": "Opacity",
@@ -774,6 +789,7 @@ const pcm = catalog({
   "docs.lama.github": "LaMa on GitHub",
   "docs.lama.paper": "Research paper",
   "docs.linkExternal": "e go open for new tab",
+  ...seoPcm,
 });
 
 const ar = catalog({
@@ -782,8 +798,8 @@ const ar = catalog({
   "nav.language": "اللغة",
 
   "title.home": "غيّر النص في أي صورة",
-  "title.howItWorks": "شكر وتقدير — pngn",
-  "title.export": "تصدير — pngn",
+  "title.howItWorks": "شكر وتقدير - pngn",
+  "title.export": "تصدير - pngn",
 
   "flow.aria": "كيفية تعديل النص في صورة",
   "flow.upload": "حمّل صورة",
@@ -868,6 +884,8 @@ const ar = catalog({
   "toolbar.size": "الحجم",
   "toolbar.weight": "السُمك",
   "toolbar.color": "اللون",
+  "toolbar.hex": "لون سداسي",
+  "toolbar.eyedropper": "اختيار لون من الشاشة",
   "toolbar.stroke": "الحد",
   "toolbar.strokeWidth": "سُمك الحد",
   "toolbar.opacity": "العتامة",
@@ -924,6 +942,7 @@ const ar = catalog({
   "docs.lama.github": "LaMa على GitHub",
   "docs.lama.paper": "ورقة بحثية",
   "docs.linkExternal": "يُفتح في علامة تبويب جديدة",
+  ...seoAr,
 });
 
 export const messages: Record<Locale, Messages> = {
