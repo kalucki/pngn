@@ -1,4 +1,3 @@
-import { debugLog } from '../debugLog'
 import type { NeuralInpaintModel } from '../document/types'
 
 export type NeuralInpaintResult = {
@@ -27,7 +26,6 @@ const pending = new Map<string, PendingRequest>()
 
 const getWorker = () => {
   if (worker) return worker
-  debugLog('workers', 'creating inpaint worker')
   worker = new Worker(new URL('../workers/inpaint.worker.ts', import.meta.url), {
     type: 'module',
   })
@@ -50,7 +48,6 @@ const getWorker = () => {
   }
   worker.onerror = (event) => {
     const error = new Error(event.message || 'The inpainting worker crashed.')
-    debugLog('workers', 'inpaint worker crashed', { message: error.message })
     for (const request of pending.values()) request.reject(error)
     pending.clear()
     worker?.terminate()
@@ -75,12 +72,6 @@ export const neuralInpaint = (
     pending.set(requestId, { resolve, reject })
     const pixels = crop.data.slice().buffer
     const maskBuffer = mask.slice().buffer
-    debugLog('workers', 'post inpaint request', {
-      requestId,
-      model,
-      width: crop.width,
-      height: crop.height,
-    })
     getWorker().postMessage(
       {
         requestId,

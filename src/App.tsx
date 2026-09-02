@@ -42,7 +42,6 @@ import {
   PencilIcon,
   PlusIcon,
 } from "./layout/icons";
-import { debugBoot, debugLog } from "./debugLog";
 import { EXPORT_PATH, navigate } from "./navigation";
 import { processImage, warmupProcessingWorker } from "./processing/client";
 import { warmupInpaintWorker } from "./processing/inpaintClient";
@@ -246,13 +245,6 @@ export const App = () => {
   const urlsRef = useRef(urls);
   const isAddingRegionRef = useRef(isAddingRegion);
   const isProcessingRef = useRef(isProcessing);
-  const debugRef = useRef({
-    hasFile: false,
-    hasSource: false,
-    stage: "waiting" as UiStage,
-    isProcessing: false,
-    method: initialOptions.method,
-  });
   const requestApplyToLayerRef = useRef<(layerId: string) => void>(() => {});
 
   const selectedLayer = useMemo(
@@ -298,10 +290,6 @@ export const App = () => {
     const activeSelection = config.selectionOverride ?? selection;
     const activeOptions = config.optionsOverride ?? optionsRef.current;
     if (!file || !activeSelection) return;
-    debugLog("ui", "processing start", {
-      method: activeOptions.method,
-      selection: activeSelection,
-    });
     const generation = ++processingGenerationRef.current;
     isProcessingRef.current = true;
     setIsProcessing(true);
@@ -392,10 +380,6 @@ export const App = () => {
       }
       setProgress(1);
       setStage("ready");
-      debugLog("ui", "processing done", {
-        method: activeOptions.method,
-        inpaintModel: processed.diagnostics.inpaintModel,
-      });
     } catch (processingError) {
       if (generation !== processingGenerationRef.current) return;
       setError(
@@ -403,12 +387,6 @@ export const App = () => {
           ? processingError.message
           : "Processing failed.",
       );
-      debugLog("ui", "processing failed", {
-        message:
-          processingError instanceof Error
-            ? processingError.message
-            : String(processingError),
-      });
       setStage("failed");
     } finally {
       if (generation === processingGenerationRef.current) {
@@ -437,39 +415,13 @@ export const App = () => {
     urlsRef.current = urls;
     isAddingRegionRef.current = isAddingRegion;
     isProcessingRef.current = isProcessing;
-    debugRef.current = {
-      hasFile: Boolean(file),
-      hasSource: Boolean(source),
-      stage,
-      isProcessing,
-      method: options.method,
-    };
     requestApplyToLayerRef.current = requestApplyToLayer;
   });
 
   useEffect(() => {
-    debugBoot();
-    debugLog("workers", "warmup start");
     warmupProcessingWorker();
     warmupInpaintWorker();
     warmupOpenCvWorker();
-    const onUnload = (event: Event) => {
-      debugLog("lifecycle", event.type, {
-        ...debugRef.current,
-        persisted:
-          "persisted" in event
-            ? Boolean((event as PageTransitionEvent).persisted)
-            : undefined,
-      });
-    };
-    window.addEventListener("beforeunload", onUnload);
-    window.addEventListener("pagehide", onUnload);
-    window.addEventListener("freeze", onUnload);
-    return () => {
-      window.removeEventListener("beforeunload", onUnload);
-      window.removeEventListener("pagehide", onUnload);
-      window.removeEventListener("freeze", onUnload);
-    };
   }, []);
 
   useEffect(() => {
@@ -486,7 +438,6 @@ export const App = () => {
   }, [options, isAddingRegion, isProcessing, file]);
 
   const requestMethod = (method: ReconstructionChoice) => {
-    debugLog("ui", "method", { method });
     setOptions((current) => ({
       ...current,
       method,
@@ -495,10 +446,6 @@ export const App = () => {
   };
 
   const requestProcessing = () => {
-    debugLog("ui", "edit selected", {
-      method: options.method,
-      hasSelection: Boolean(selection),
-    });
     void runProcessing();
   };
 
@@ -520,13 +467,6 @@ export const App = () => {
       bitmap.close();
       setFile(nextFile);
       setSource(nextSource);
-      debugLog("ui", "image loaded", {
-        name: nextFile.name,
-        type: nextFile.type,
-        size: nextFile.size,
-        width: nextSource.width,
-        height: nextSource.height,
-      });
       prefetchInpaintModel(neuralModelFor(options.method));
       setSelection(null);
       setResult(null);
@@ -958,10 +898,7 @@ export const App = () => {
                   width={source.width}
                   height={source.height}
                   selection={selection}
-                  onChange={(next) => {
-                    debugLog("ui", "selection", next);
-                    setSelection(next);
-                  }}
+                  onChange={setSelection}
                 />
               ) : (
                 <EditorCanvas

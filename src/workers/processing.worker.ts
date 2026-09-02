@@ -5,7 +5,6 @@ import {
   PaddleOcrService,
   type FlattenedPaddleOcrResult,
 } from 'ppu-paddle-ocr/web'
-import { debugLog } from '../debugLog'
 import type { DetectedText } from '../document/types'
 import { reconstructTextRegions } from '../processing/reconstruction'
 import {
@@ -24,8 +23,6 @@ let ready: Promise<PaddleOcrService> | null = null
 
 const getService = () => {
   ready ??= (async () => {
-    debugLog('ocr', 'initializing PaddleOCR')
-    const startedAt = performance.now()
     provider = (await isWebGpuAvailable()) ? 'webgpu' : 'wasm'
     const service = new PaddleOcrService({
       model: {
@@ -51,10 +48,6 @@ const getService = () => {
       },
     })
     await service.initialize()
-    debugLog('ocr', 'PaddleOCR ready', {
-      provider,
-      ms: Math.round(performance.now() - startedAt),
-    })
     return service
   })()
   return ready
@@ -131,10 +124,6 @@ const createOcrCrop = (
 
 const processImage = async (request: ProcessingRequest) => {
   const startedAt = performance.now()
-  debugLog('ocr', 'process start', {
-    requestId: request.requestId,
-    method: request.options.method,
-  })
   progress(request.requestId, 'loading-models', 0.05)
   const [service, decoded] = await Promise.all([
     getService(),
@@ -222,11 +211,6 @@ const processImage = async (request: ProcessingRequest) => {
     },
   }
 
-  debugLog('ocr', 'process done', {
-    requestId: request.requestId,
-    inpaintModel: reconstruction.inpaintModel,
-    totalMs: Math.round(performance.now() - startedAt),
-  })
   send(
     { type: 'success', requestId: request.requestId, result },
     [cleanImage, maskImage],
@@ -235,10 +219,6 @@ const processImage = async (request: ProcessingRequest) => {
 
 self.onmessage = (event: MessageEvent<ProcessingRequest>) => {
   void processImage(event.data).catch((error: unknown) => {
-    debugLog('ocr', 'process failed', {
-      requestId: event.data.requestId,
-      message: error instanceof Error ? error.message : String(error),
-    })
     send({
       type: 'error',
       requestId: event.data.requestId,

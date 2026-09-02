@@ -1485,7 +1485,19 @@ html:has(.app-root:not([hidden]) .app-shell.is-landing) .site-nav {
 }
 
 .field-font {
+  width: 11rem;
   min-width: 11rem;
+  flex: 0 0 11rem;
+}
+
+.field-font .mantine-Select-root,
+.field-font .mantine-Input-wrapper {
+  width: 100%;
+}
+
+.field-font .mantine-Input-input {
+  width: 100%;
+  font-family: inherit;
 }
 
 .field-font[data-font-status='loading'] {

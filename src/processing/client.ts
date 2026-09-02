@@ -3,7 +3,6 @@ import type {
   ProcessedImage,
   ProcessingOptions,
 } from '../document/types'
-import { debugLog } from '../debugLog'
 import type {
   ProcessingRequest,
   ProcessingResponse,
@@ -25,7 +24,6 @@ let worker: Worker | null = null
 
 const getWorker = () => {
   if (worker) return worker
-  debugLog('workers', 'creating processing worker')
   worker = new Worker(
     new URL('../workers/processing.worker.ts', import.meta.url),
     { type: 'module' },
@@ -49,7 +47,6 @@ const getWorker = () => {
 
   worker.onerror = (event) => {
     const error = new Error(event.message || 'The processing worker crashed.')
-    debugLog('workers', 'processing worker crashed', { message: error.message })
     for (const request of pending.values()) request.reject(error)
     pending.clear()
     worker?.terminate()
@@ -80,10 +77,5 @@ export const processImage = (
       selection,
       options,
     }
-    debugLog('workers', 'post process request', {
-      requestId,
-      method: options.method,
-      mimeType,
-    })
     getWorker().postMessage(request, [image])
   })

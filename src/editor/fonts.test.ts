@@ -9,6 +9,7 @@ import {
   latinFontFaces,
   nearestWeight,
   parseGoogleFontCss,
+  withSettledFonts,
 } from './fonts'
 
 describe('font catalog', () => {
@@ -45,6 +46,37 @@ describe('font helpers', () => {
     expect(googleCssUrl('Open Sans', 700)).toBe(
       'https://fonts.googleapis.com/css2?family=Open+Sans:wght@700&display=swap',
     )
+  })
+
+  it('keeps the previous face while a Google font is still loading', () => {
+    const previous = [
+      {
+        id: 'layer',
+        typography: { fontFamily: 'Arial', fontWeight: 700, fontSize: 24 },
+      },
+    ]
+    const next = [
+      {
+        id: 'layer',
+        typography: { fontFamily: 'Merriweather', fontWeight: 700, fontSize: 24 },
+      },
+    ]
+    expect(withSettledFonts(next, previous)).toEqual([
+      {
+        id: 'layer',
+        typography: { fontFamily: 'Arial', fontWeight: 700, fontSize: 24 },
+      },
+    ])
+  })
+
+  it('uses the requested face once it has settled as a system font', () => {
+    const next = [
+      {
+        id: 'layer',
+        typography: { fontFamily: 'Georgia', fontWeight: 700 },
+      },
+    ]
+    expect(withSettledFonts(next, [])).toBe(next)
   })
 })
 

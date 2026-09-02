@@ -1,5 +1,3 @@
-import { debugLog } from '../debugLog'
-
 type OpenCvMethod = 'telea' | 'navier-stokes'
 
 type OpenCvResponse =
@@ -18,7 +16,6 @@ const pending = new Map<string, PendingRequest>()
 
 const getWorker = () => {
   if (worker) return worker
-  debugLog('workers', 'creating opencv worker')
   worker = new Worker(new URL('../workers/opencv.worker.ts', import.meta.url), {
     type: 'module',
   })

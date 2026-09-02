@@ -5,7 +5,6 @@ import type {
   ResolvedReconstructionMethod,
   TextLayer,
 } from '../document/types'
-import { debugLog } from '../debugLog'
 import { inpaint, type InpaintMethod } from './inpaint'
 import { neuralInpaint } from './inpaintClient'
 import {
@@ -394,11 +393,6 @@ export const reconstructTextRegions = async (
         options.method === 'auto' &&
         analyticalFillDisagreesWithRing(clean, segmentation)
       ) {
-        debugLog('inpaint', 'analytical fill rejected, escalating to lama', {
-          localVariance: segmentation.model.localVariance,
-          fitError: segmentation.model.fitError,
-          edgeDensity: segmentation.model.edgeDensity,
-        })
         restoreMaskedRegion(clean, original, segmentation)
         method = COMPLEX_BACKGROUND_ENGINE
         methods[index] = method
@@ -418,11 +412,6 @@ export const reconstructTextRegions = async (
       const context = extractContext(clean, segmentation)
       let restored: ImageData
       try {
-        debugLog('inpaint', 'neural pass', {
-          method,
-          width: context.crop.width,
-          height: context.crop.height,
-        })
         const result = await neuralInpaint(
           context.crop,
           context.mask,
@@ -431,15 +420,7 @@ export const reconstructTextRegions = async (
         restored = result.image
         inpaintModel = method as NeuralInpaintModel
         inpaintProvider = result.provider
-        debugLog('inpaint', 'neural pass ok', {
-          method,
-          provider: result.provider,
-        })
       } catch (error) {
-        debugLog('inpaint', 'neural pass failed, using Telea', {
-          method,
-          message: error instanceof Error ? error.message : String(error),
-        })
         console.warn(
           `Neural inpaint (${method}) failed; falling back to Telea.`,
           error,

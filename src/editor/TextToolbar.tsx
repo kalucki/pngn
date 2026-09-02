@@ -67,7 +67,11 @@ export const TextToolbar = ({ layer, onChange }: TextToolbarProps) => {
     if (!fontFamily || inactive) return
     if (isFontReady(fontFamily, fontWeight)) return
     let cancelled = false
-    void ensureFont(fontFamily, fontWeight, true).then(() => {
+    void ensureFont(
+      fontFamily,
+      fontWeight,
+      isFontFailed(fontFamily, fontWeight),
+    ).then(() => {
       if (!cancelled) setFontEpoch((epoch) => epoch + 1)
     })
     return () => {
@@ -146,12 +150,6 @@ export const TextToolbar = ({ layer, onChange }: TextToolbarProps) => {
           data={fontSelectData}
           renderOption={renderFontOption}
           comboboxProps={{ width: 260, shadow: 'md', withinPortal: true }}
-          styles={{
-            input:
-              !inactive && fontStatus === 'idle' && fontFamily
-                ? { fontFamily: `"${fontFamily}", sans-serif` }
-                : undefined,
-          }}
           onChange={(value) => {
             if (!value) return
             const nextFont = fontByFamily(value)

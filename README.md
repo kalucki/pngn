@@ -1,8 +1,9 @@
-# txtimg prototype
+# pngn
 
-A browser-only prototype that detects text with PP-OCRv6, builds a deterministic
-removal mask, reconstructs the covered background, and exposes the recognized
-text as editable layers.
+Change text on any image, entirely in the browser. pngn finds letters in a
+selection, paints them out of the background, and turns the recognized text into
+editable layers. Images never leave the device: there is no account, no upload,
+and no server-side processing.
 
 ## Run locally
 
@@ -12,50 +13,49 @@ pnpm fetch:models   # downloads the neural inpainting weights (once)
 pnpm dev
 ```
 
-`pnpm fetch:models` fetches the MI-GAN (Free) and LaMa (Pro) ONNX weights into
+`pnpm fetch:models` fetches the MI-GAN and LaMa ONNX weights into
 `public/models/inpaint/`. They are large (LaMa ~200 MB) and are gitignored, so
 run it once after cloning. URLs can be overridden with `MIGAN_URL` / `LAMA_URL`.
 
-Open the local URL shown by Vite, upload a PNG/JPEG/WebP image, drag a rectangle
+Open the local URL shown by Vite, drop a PNG, JPEG, or WebP, drag a rectangle
 around the text to change, then edit and export at the original resolution. OCR
 runs only on an automatically padded version of that selection; segmentation
 and reconstruction still use surrounding full-resolution source pixels.
 
-Use **Add another text area** to draw more regions. Previously reconstructed
-background pixels and edited layers remain active, and every editable text
-rectangle stays visible on the editor canvas.
+Use **Select another area** to process more regions. Previously reconstructed
+background pixels and edited layers stay in place, and every text rectangle
+remains visible on the editor canvas.
 
-## Reconstruction tiers
+The UI is localized in English, Spanish, Polish, Simplified Chinese, Nigerian
+Pidgin, and Arabic (RTL). Credits for the inpainting models live at
+`/how-it-works`.
 
-Reconstruction is split into two client-side tiers, swappable with the Free/Pro
-toggle:
+## Editing
 
-- **Free — MI-GAN** (`migan_pipeline_v2.onnx`, ~28 MB, MIT). Runs in the browser
-  via ONNX Runtime Web (WebGPU, WASM fallback). The default for complex
-  backgrounds.
-- **Pro — LaMa** (`lama_fp32.onnx`, ~200 MB, Apache-2.0). Higher quality for
-  tough, detailed backgrounds; lazily downloaded on first use. Gated behind an
-  email prompt (stored locally for now; no payment, no account).
+Recognized text becomes layers you can rewrite, restyle, move, and rotate.
+Typography covers font (system plus Google Fonts), size, weight, color, stroke,
+and opacity. Mask threshold and mask expansion adjust how aggressively the old
+letters are erased.
 
-Both run fully client-side. `auto` sends truly flat/gradient backgrounds to the
-instant analytical fills and everything else to the tier's neural model, falling
-back to classical OpenCV Telea if a model fails to load. Neural fills use a
-padded context crop and a feathered composite so there are no hard seams.
+Export as PNG, JPEG, or WebP. The download is composed locally and never leaves
+the browser.
 
-If a region still looks wrong, the **"Not happy with the result?"** prompt
-re-runs that area with the Pro model and lets you keep either the Free or Pro
-result.
+## Reconstruction
 
-## Reconstruction methods
+Choose a fill from the Reconstruction control:
 
-- MI-GAN neural inpainting (Free tier)
-- LaMa neural inpainting (Pro tier)
-- Flat-color median fill
-- Per-channel linear gradient fit
-- OpenCV Telea inpainting
-- OpenCV Navier–Stokes inpainting
-- Deterministic exemplar patch fill
-- Automatic background classification
+- **Auto** — instant color or gradient fill on flat backgrounds; LaMa on photos
+  and busy textures.
+- **MI-GAN** (`migan_pipeline_v2.onnx`, ~28 MB, MIT) — faster neural fill. Best
+  for small text and simple backgrounds.
+- **LaMa** (`lama_fp32.onnx`, ~200 MB, Apache-2.0) — slower, more detailed fill
+  for large text, photos, or busy textures.
+
+Both neural models run fully client-side via ONNX Runtime Web (WebGPU, WASM
+fallback). Weights are prefetched into Cache Storage and loaded on first use.
+Neural fills use a padded context crop and a feathered composite so there are
+no hard seams. If a neural model fails to load, reconstruction falls back to
+OpenCV Telea.
 
 Glyph masks use crop-local robust background fitting, perceptual Lab residuals,
 adaptive noise thresholds, color-cluster rejection, morphology, and connected

@@ -1,7 +1,6 @@
 /// <reference lib="webworker" />
 
 import * as ort from 'onnxruntime-web'
-import { debugLog } from '../debugLog'
 import type { NeuralInpaintModel } from '../document/types'
 import {
   INPAINT_CACHE_NAME,
@@ -86,18 +85,8 @@ type LoadedSession = {
 const sessions = new Map<NeuralInpaintModel, Promise<LoadedSession>>()
 
 const probeModel = async (spec: ModelSpec) => {
-  debugLog('inpaint', 'probing model', { url: spec.url, minBytes: spec.minBytes })
-  const startedAt = performance.now()
   const response = await fetch(spec.url, { method: 'HEAD', cache: 'no-store' })
   const size = Number(response.headers.get('content-length') ?? 0)
-  debugLog('inpaint', 'probe finished', {
-    url: spec.url,
-    ok: response.ok,
-    status: response.status,
-    contentType: response.headers.get('content-type'),
-    size,
-    ms: Math.round(performance.now() - startedAt),
-  })
   if (
     !response.ok ||
     size < spec.minBytes ||
@@ -113,10 +102,6 @@ const openCachedModel = async (spec: ModelSpec) => {
   const cache = await caches.open(INPAINT_CACHE_NAME)
   const cached = await cache.match(spec.url)
   if (!cached) return null
-  debugLog('inpaint', 'using cached weights', {
-    url: spec.url,
-    size: Number(cached.headers.get('content-length') ?? 0),
-  })
   return URL.createObjectURL(await cached.blob())
 }
 
@@ -125,7 +110,6 @@ const loadSession = (model: NeuralInpaintModel): Promise<LoadedSession> => {
   if (existing) return existing
   const promise = (async () => {
     const provider = await detectProvider()
-    debugLog('inpaint', 'creating session', { model, provider })
     if (provider === 'wasm') {
       ort.env.wasm.numThreads = Math.max(
         1,
@@ -136,12 +120,6 @@ const loadSession = (model: NeuralInpaintModel): Promise<LoadedSession> => {
     const cachedUrl = await openCachedModel(spec)
     if (!cachedUrl) await probeModel(spec)
     const source = cachedUrl ?? spec.url
-    debugLog('inpaint', 'loading ONNX weights', {
-      model,
-      url: spec.url,
-      fromCache: Boolean(cachedUrl),
-    })
-    const startedAt = performance.now()
     try {
       const session = await ort.InferenceSession.create(source, {
         executionProviders:
@@ -155,13 +133,6 @@ const loadSession = (model: NeuralInpaintModel): Promise<LoadedSession> => {
       const imageInput =
         session.inputNames.find((name) => name !== maskInput) ??
         session.inputNames[0]
-      debugLog('inpaint', 'session ready', {
-        model,
-        provider,
-        ms: Math.round(performance.now() - startedAt),
-        inputs: session.inputNames,
-        outputs: session.outputNames,
-      })
       return {
         session,
         provider,
@@ -174,11 +145,7 @@ const loadSession = (model: NeuralInpaintModel): Promise<LoadedSession> => {
     }
   })()
   sessions.set(model, promise)
-  void promise.catch((error: unknown) => {
-    debugLog('inpaint', 'session failed', {
-      model,
-      message: error instanceof Error ? error.message : String(error),
-    })
+  void promise.catch(() => {
     if (sessions.get(model) === promise) sessions.delete(model)
   })
   return promise
@@ -336,12 +303,6 @@ const runFixedFloat = async (
 const processRequest = async (
   request: InpaintRequest,
 ): Promise<InpaintResponse> => {
-  debugLog('inpaint', 'run', {
-    requestId: request.requestId,
-    model: request.model,
-    width: request.width,
-    height: request.height,
-  })
   const spec = MODEL_SPECS[request.model]
   const loaded = await loadSession(request.model)
   const crop = new ImageData(
@@ -374,11 +335,6 @@ self.onmessage = (event: MessageEvent<InpaintRequest>) => {
       self.postMessage(response, { transfer })
     })
     .catch((error: unknown) => {
-      debugLog('inpaint', 'run failed', {
-        requestId: event.data.requestId,
-        model: event.data.model,
-        message: error instanceof Error ? error.message : String(error),
-      })
       const response: InpaintResponse = {
         requestId: event.data.requestId,
         type: 'error',

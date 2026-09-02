@@ -130,7 +130,7 @@ export const en = {
   "docs.kicker": "Kudos",
   "docs.title": "Thanks to the people who made this possible",
   "docs.intro":
-    "p(e)ng(ui)n paints text out of your images using published inpainting research. This page is a thank-you to those authors. Nothing is processed on a server.",
+    "p(e)ng(ui)n paints text out of your images using published inpainting research. This page is a thank-you to those authors.",
   "docs.privacy": "We don't save your images",
   "docs.privacy.p1":
     "There is no server-side processing. Finding the text, filling the background, editing, and export all happen in this browser.",

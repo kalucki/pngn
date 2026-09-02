@@ -13,7 +13,7 @@ import {
   toLocalBoundsPoint,
 } from './imageGeometry'
 import { drawLayerText, layerStrokeOutset } from './drawTextLayer'
-import { ensureFontsForLayers } from './fonts'
+import { ensureFontsForLayers, withSettledFonts } from './fonts'
 import {
   applyCanvasBacking,
   ZOOM_REDRAW_DEBOUNCE_MS,
@@ -104,6 +104,7 @@ export const EditorCanvas = ({
     canvasRef,
   )
   const transformRef = useRef(transform)
+  const settledLayersRef = useRef(layers)
 
   const hitAtPoint = (canvas: HTMLCanvasElement, point: Point): LayerHit | null => {
     const displayWidth = displayedImageWidth(canvas, width, height)
@@ -184,12 +185,16 @@ export const EditorCanvas = ({
       context.clearRect(0, 0, width, height)
       context.drawImage(image, 0, 0, width, height)
 
-      for (const layer of layers) {
+      const paintLayers = withSettledFonts(layers, settledLayersRef.current)
+      if (paintLayers === layers) settledLayersRef.current = layers
+
+      for (const [index, layer] of layers.entries()) {
         const { bounds, typography, effects } = layer
+        const paintLayer = paintLayers[index] ?? layer
         context.save()
         context.globalAlpha = effects.opacity
         applyLayerTransform(context, layer)
-        drawLayerText(context, layer)
+        drawLayerText(context, paintLayer)
         context.restore()
 
         if (interactionMode === 'preview') continue

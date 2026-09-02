@@ -332,7 +332,7 @@ const loadGoogleFont = async (family: string, weight: number) => {
       const face = new FontFace(family, `url(${parsed.url})`, {
         weight: String(weight),
         style: 'normal',
-        display: 'swap',
+        display: 'block',
         unicodeRange: parsed.unicodeRange,
       })
       await face.load()
@@ -356,6 +356,58 @@ export const isFontFailed = (family: string, weight: number) => {
   return failedFaces.has(
     fontCacheKey(font.family, nearestWeight(font.weights, weight)),
   )
+}
+
+export const isFontSettled = (family: string, weight: number) =>
+  isFontReady(family, weight) || isFontFailed(family, weight)
+
+type FontTypography = { fontFamily: string; fontWeight: number }
+
+type FontLayer = {
+  id: string
+  typography: FontTypography
+}
+
+/**
+ * While a Google font is still downloading, keep the previous face so
+ * canvas/CSS do not paint a fallback and then jump when the file arrives.
+ */
+export const withSettledFonts = <T extends FontLayer>(
+  layers: T[],
+  previous: T[],
+): T[] => {
+  if (
+    layers.every((layer) =>
+      isFontSettled(layer.typography.fontFamily, layer.typography.fontWeight),
+    )
+  ) {
+    return layers
+  }
+
+  const previousById = new Map(previous.map((layer) => [layer.id, layer]))
+  return layers.map((layer) => {
+    if (
+      isFontSettled(layer.typography.fontFamily, layer.typography.fontWeight)
+    ) {
+      return layer
+    }
+    const prior = previousById.get(layer.id)
+    if (
+      !prior ||
+      (prior.typography.fontFamily === layer.typography.fontFamily &&
+        prior.typography.fontWeight === layer.typography.fontWeight)
+    ) {
+      return layer
+    }
+    return {
+      ...layer,
+      typography: {
+        ...layer.typography,
+        fontFamily: prior.typography.fontFamily,
+        fontWeight: prior.typography.fontWeight,
+      },
+    }
+  })
 }
 
 export const ensureFont = async (
