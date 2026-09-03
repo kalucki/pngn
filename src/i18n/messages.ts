@@ -3,8 +3,11 @@ import { seoAr, seoEn, seoEs, seoPcm, seoPl, seoZh } from "./seoMessages";
 
 export const en = {
   "nav.primary": "Primary",
+  "nav.home": "Home",
   "nav.howItWorks": "Credits",
   "nav.language": "Language",
+  "footer.nav": "Footer",
+  "footer.copyright": "© {year} pngn",
 
   "title.home": "Change text on any image",
   "title.howItWorks": "Credits - pngn",
@@ -24,6 +27,7 @@ export const en = {
     "We are not storing uploaded images, they never leave your browser.",
 
   "app.newImage": "New image",
+  "app.restart": "Restart",
   "app.dragHint":
     "Drag a box around the text you want to change. Scroll to zoom.",
   "app.editSelected": "Edit selected text",
@@ -56,6 +60,7 @@ export const en = {
   "app.selectLayerToApply": "Select a text layer to apply.",
   "app.doneEditing": "Done editing?",
   "app.exportFormat": "Export format",
+  "app.exportModalTitle": "Export image",
   "app.export": "Export",
   "app.exporting": "Exporting…",
   "layers.title": "Layers",
@@ -75,6 +80,17 @@ export const en = {
   "stage.ready": "Ready to edit",
   "stage.failed": "Processing failed",
 
+  "loading.peckingPixels": "Pecking at pixels",
+  "loading.pickingTypeface": "Picking a typeface",
+  "loading.brushingIceberg": "Brushing the iceberg",
+  "loading.sortingFeathers": "Sorting feathers",
+  "loading.rufflingLetters": "Ruffling letters",
+  "loading.polishingBeak": "Polishing the beak",
+  "loading.waddlingGlyphs": "Waddling through glyphs",
+  "loading.slidingSerifs": "Sliding on serifs",
+  "loading.huddlingLetters": "Huddling the letters",
+  "loading.fishingFonts": "Fishing for fonts",
+
   "error.chooseImageType": "Choose a PNG, JPEG, or WebP image.",
   "error.decodeFailed": "This image could not be decoded by the browser.",
   "error.processingFailed": "Processing failed.",
@@ -93,6 +109,7 @@ export const en = {
   "toolbar.font": "Font",
   "toolbar.fontError": "Could not load this font. Using a system font instead.",
   "toolbar.fontEmpty": "No fonts found",
+  "toolbar.fontMatchPending": "Matching font…",
   "toolbar.size": "Size",
   "toolbar.weight": "Weight",
   "toolbar.color": "Color",
@@ -106,6 +123,7 @@ export const en = {
   "fontGroup.serif": "Serif",
   "fontGroup.display": "Display",
   "fontGroup.mono": "Monospace",
+  "fontGroup.detected": "Suggested similar fonts",
   "fontWeight.100": "Thin",
   "fontWeight.200": "Extra light",
   "fontWeight.300": "Light",
@@ -118,6 +136,8 @@ export const en = {
 
   "region.alt": "Choose the text region to edit",
   "region.selectText": "Select text",
+  "grid.show": "Show grid",
+  "grid.hide": "Hide grid",
   "zoom.reset": "Reset zoom to original size",
 
   "export.couldNot": "Could not export",
@@ -125,8 +145,7 @@ export const en = {
     "No export in progress. Use Export after editing an image.",
   "export.back": "Back to editor",
   "export.downloadStarted": "Download started",
-  "export.saving":
-    "{filename} is saving to your computer. The file never left this browser.",
+  "export.saving": "{filename} is being saved to your computer.",
   "export.previewAlt": "Exported image preview",
   "export.downloadAgain": "Download again",
 
@@ -166,8 +185,11 @@ const catalog = (messages: Messages): Messages => messages;
 
 const es = catalog({
   "nav.primary": "Principal",
+  "nav.home": "Inicio",
   "nav.howItWorks": "Créditos",
   "nav.language": "Idioma",
+  "footer.nav": "Pie de página",
+  "footer.copyright": "© {year} pngn",
 
   "title.home": "Cambia el texto de cualquier imagen",
   "title.howItWorks": "Créditos - pngn",
@@ -187,6 +209,7 @@ const es = catalog({
     "No almacenamos las imágenes subidas; nunca salen de tu navegador.",
 
   "app.newImage": "Nueva imagen",
+  "app.restart": "Reiniciar",
   "app.dragHint":
     "Arrastra un recuadro alrededor del texto que quieres cambiar. Desplázate para ampliar.",
   "app.editSelected": "Editar el texto seleccionado",
@@ -220,6 +243,7 @@ const es = catalog({
   "app.selectLayerToApply": "Selecciona una capa de texto para aplicar.",
   "app.doneEditing": "¿Terminaste de editar?",
   "app.exportFormat": "Formato de exportación",
+  "app.exportModalTitle": "Exportar imagen",
   "app.export": "Exportar",
   "app.exporting": "Exportando…",
   "layers.title": "Capas",
@@ -238,6 +262,17 @@ const es = catalog({
   "stage.reconstruction": "Reconstrucción",
   "stage.ready": "Listo para editar",
   "stage.failed": "El procesamiento falló",
+
+  "loading.peckingPixels": "Picoteando píxeles",
+  "loading.pickingTypeface": "Eligiendo una tipografía",
+  "loading.brushingIceberg": "Cepillando el iceberg",
+  "loading.sortingFeathers": "Ordenando plumas",
+  "loading.rufflingLetters": "Alborotando las letras",
+  "loading.polishingBeak": "Pulendo el pico",
+  "loading.waddlingGlyphs": "Caminando entre glifos",
+  "loading.slidingSerifs": "Deslizando por las serifas",
+  "loading.huddlingLetters": "Acurrucando las letras",
+  "loading.fishingFonts": "Pescando tipografías",
 
   "error.chooseImageType": "Elige una imagen PNG, JPEG o WebP.",
   "error.decodeFailed": "El navegador no pudo decodificar esta imagen.",
@@ -259,6 +294,7 @@ const es = catalog({
   "toolbar.fontError":
     "No se pudo cargar esta fuente. Se usará una fuente del sistema.",
   "toolbar.fontEmpty": "No se encontraron fuentes",
+  "toolbar.fontMatchPending": "Buscando fuente…",
   "toolbar.size": "Tamaño",
   "toolbar.weight": "Grosor",
   "toolbar.color": "Color",
@@ -272,6 +308,7 @@ const es = catalog({
   "fontGroup.serif": "Serif",
   "fontGroup.display": "Display",
   "fontGroup.mono": "Monoespaciada",
+  "fontGroup.detected": "Fuentes similares sugeridas",
   "fontWeight.100": "Fina",
   "fontWeight.200": "Extra ligera",
   "fontWeight.300": "Ligera",
@@ -284,6 +321,8 @@ const es = catalog({
 
   "region.alt": "Elige la región de texto a editar",
   "region.selectText": "Seleccionar texto",
+  "grid.show": "Mostrar cuadrícula",
+  "grid.hide": "Ocultar cuadrícula",
   "zoom.reset": "Restablecer zoom al tamaño original",
 
   "export.couldNot": "No se pudo exportar",
@@ -327,8 +366,11 @@ const es = catalog({
 
 const pl = catalog({
   "nav.primary": "Główne",
+  "nav.home": "Start",
   "nav.howItWorks": "Podziękowania",
   "nav.language": "Język",
+  "footer.nav": "Stopka",
+  "footer.copyright": "© {year} pngn",
 
   "title.home": "Zmień tekst na dowolnym obrazie",
   "title.howItWorks": "Podziękowania - pngn",
@@ -348,6 +390,7 @@ const pl = catalog({
     "Nie przechowujemy wczytanych obrazów; nigdy nie opuszczają Twojej przeglądarki.",
 
   "app.newImage": "Nowy obraz",
+  "app.restart": "Od nowa",
   "app.dragHint":
     "Przeciągnij ramkę wokół tekstu, który chcesz zmienić. Przewiń, aby powiększyć.",
   "app.editSelected": "Edytuj zaznaczony tekst",
@@ -381,6 +424,7 @@ const pl = catalog({
   "app.selectLayerToApply": "Wybierz warstwę tekstu, aby zastosować.",
   "app.doneEditing": "Skończyłeś edycję?",
   "app.exportFormat": "Format eksportu",
+  "app.exportModalTitle": "Eksportuj obraz",
   "app.export": "Eksportuj",
   "app.exporting": "Eksportowanie…",
   "layers.title": "Warstwy",
@@ -399,6 +443,17 @@ const pl = catalog({
   "stage.reconstruction": "Rekonstrukcja",
   "stage.ready": "Gotowe do edycji",
   "stage.failed": "Przetwarzanie nie powiodło się",
+
+  "loading.peckingPixels": "Dziobanie pikseli",
+  "loading.pickingTypeface": "Wybieranie kroju pisma",
+  "loading.brushingIceberg": "Szczotkowanie góry lodowej",
+  "loading.sortingFeathers": "Sortowanie piór",
+  "loading.rufflingLetters": "Mierzwienie liter",
+  "loading.polishingBeak": "Polerowanie dzioba",
+  "loading.waddlingGlyphs": "Chodzenie wśród glifów",
+  "loading.slidingSerifs": "Ślizganie po szeryfach",
+  "loading.huddlingLetters": "Tulenie liter",
+  "loading.fishingFonts": "Łowienie fontów",
 
   "error.chooseImageType": "Wybierz obraz PNG, JPEG lub WebP.",
   "error.decodeFailed": "Przeglądarka nie mogła odczytać tego obrazu.",
@@ -420,6 +475,7 @@ const pl = catalog({
   "toolbar.fontError":
     "Nie udało się wczytać tej czcionki. Używana jest czcionka systemowa.",
   "toolbar.fontEmpty": "Nie znaleziono czcionek",
+  "toolbar.fontMatchPending": "Dopasowuję czcionkę…",
   "toolbar.size": "Rozmiar",
   "toolbar.weight": "Grubość",
   "toolbar.color": "Kolor",
@@ -433,6 +489,7 @@ const pl = catalog({
   "fontGroup.serif": "Szeryfowe",
   "fontGroup.display": "Ozdobne",
   "fontGroup.mono": "Monospace",
+  "fontGroup.detected": "Sugerowane podobne czcionki",
   "fontWeight.100": "Cienka",
   "fontWeight.200": "Bardzo lekka",
   "fontWeight.300": "Lekka",
@@ -445,6 +502,8 @@ const pl = catalog({
 
   "region.alt": "Wybierz obszar tekstu do edycji",
   "region.selectText": "Zaznacz tekst",
+  "grid.show": "Pokaż siatkę",
+  "grid.hide": "Ukryj siatkę",
   "zoom.reset": "Przywróć oryginalny rozmiar",
 
   "export.couldNot": "Nie udało się wyeksportować",
@@ -487,8 +546,11 @@ const pl = catalog({
 
 const zh = catalog({
   "nav.primary": "主导航",
+  "nav.home": "首页",
   "nav.howItWorks": "致谢",
   "nav.language": "语言",
+  "footer.nav": "页脚",
+  "footer.copyright": "© {year} pngn",
 
   "title.home": "修改任意图片上的文字",
   "title.howItWorks": "致谢 - pngn",
@@ -506,6 +568,7 @@ const zh = catalog({
   "landing.privacy": "我们不会存储你上传的图片，它们不会离开你的浏览器。",
 
   "app.newImage": "新图片",
+  "app.restart": "重新开始",
   "app.dragHint": "在要修改的文字周围拖出一个框。滚动可缩放。",
   "app.editSelected": "编辑所选文字",
   "app.processing": "处理中…",
@@ -533,6 +596,7 @@ const zh = catalog({
   "app.selectLayerToApply": "选择一个文字图层以应用。",
   "app.doneEditing": "编辑完成？",
   "app.exportFormat": "导出格式",
+  "app.exportModalTitle": "导出图片",
   "app.export": "导出",
   "app.exporting": "正在导出…",
   "layers.title": "图层",
@@ -552,6 +616,17 @@ const zh = catalog({
   "stage.ready": "可以编辑",
   "stage.failed": "处理失败",
 
+  "loading.peckingPixels": "啄着像素",
+  "loading.pickingTypeface": "挑选字体",
+  "loading.brushingIceberg": "刷着冰山",
+  "loading.sortingFeathers": "整理羽毛",
+  "loading.rufflingLetters": "拨弄字母",
+  "loading.polishingBeak": "打磨喙",
+  "loading.waddlingGlyphs": "摇摇摆摆穿过字形",
+  "loading.slidingSerifs": "滑过衬线",
+  "loading.huddlingLetters": "把字母挤在一起取暖",
+  "loading.fishingFonts": "钓字体",
+
   "error.chooseImageType": "请选择 PNG、JPEG 或 WebP 图片。",
   "error.decodeFailed": "浏览器无法解码此图片。",
   "error.processingFailed": "处理失败。",
@@ -569,6 +644,7 @@ const zh = catalog({
   "toolbar.font": "字体",
   "toolbar.fontError": "无法加载此字体，将改用系统字体。",
   "toolbar.fontEmpty": "未找到字体",
+  "toolbar.fontMatchPending": "正在匹配字体…",
   "toolbar.size": "大小",
   "toolbar.weight": "字重",
   "toolbar.color": "颜色",
@@ -582,6 +658,7 @@ const zh = catalog({
   "fontGroup.serif": "衬线",
   "fontGroup.display": "展示",
   "fontGroup.mono": "等宽",
+  "fontGroup.detected": "建议的相似字体",
   "fontWeight.100": "极细",
   "fontWeight.200": "特细",
   "fontWeight.300": "细",
@@ -594,6 +671,8 @@ const zh = catalog({
 
   "region.alt": "选择要编辑的文字区域",
   "region.selectText": "选择文字",
+  "grid.show": "显示网格",
+  "grid.hide": "隐藏网格",
   "zoom.reset": "将缩放恢复为原始大小",
 
   "export.couldNot": "无法导出",
@@ -635,8 +714,11 @@ const zh = catalog({
 
 const pcm = catalog({
   "nav.primary": "Main menu",
+  "nav.home": "Home",
   "nav.howItWorks": "Credits",
   "nav.language": "Language",
+  "footer.nav": "Footer",
+  "footer.copyright": "© {year} pngn",
 
   "title.home": "Change writing wey dey for any picture",
   "title.howItWorks": "Credits - pngn",
@@ -656,6 +738,7 @@ const pcm = catalog({
     "We no dey store the pictures wey you upload; dem no dey leave this browser.",
 
   "app.newImage": "New picture",
+  "app.restart": "Start again",
   "app.dragHint":
     "Drag box around the writing wey you wan change. Scroll make e zoom.",
   "app.editSelected": "Change the writing wey you select",
@@ -688,6 +771,7 @@ const pcm = catalog({
   "app.selectLayerToApply": "Select one writing layer to apply.",
   "app.doneEditing": "You don finish edit?",
   "app.exportFormat": "Export format",
+  "app.exportModalTitle": "Export image",
   "app.export": "Export",
   "app.exporting": "E dey export…",
   "layers.title": "Layers",
@@ -706,6 +790,17 @@ const pcm = catalog({
   "stage.reconstruction": "Reconstruction",
   "stage.ready": "E don ready to edit",
   "stage.failed": "Processing no work",
+
+  "loading.peckingPixels": "E dey peck pixels",
+  "loading.pickingTypeface": "E dey pick typeface",
+  "loading.brushingIceberg": "E dey brush the iceberg",
+  "loading.sortingFeathers": "E dey sort feathers",
+  "loading.rufflingLetters": "E dey ruffle letters",
+  "loading.polishingBeak": "E dey polish the beak",
+  "loading.waddlingGlyphs": "E dey waddle through glyphs",
+  "loading.slidingSerifs": "E dey slide on serifs",
+  "loading.huddlingLetters": "E dey huddle the letters",
+  "loading.fishingFonts": "E dey fish for fonts",
 
   "error.chooseImageType": "Choose PNG, JPEG, or WebP picture.",
   "error.decodeFailed": "This browser no fit read this picture.",
@@ -726,6 +821,7 @@ const pcm = catalog({
   "toolbar.font": "Font",
   "toolbar.fontError": "E no fit load this font. E go use system font instead.",
   "toolbar.fontEmpty": "E no find any font",
+  "toolbar.fontMatchPending": "E dey match font…",
   "toolbar.size": "Size",
   "toolbar.weight": "Weight",
   "toolbar.color": "Color",
@@ -739,6 +835,7 @@ const pcm = catalog({
   "fontGroup.serif": "Serif",
   "fontGroup.display": "Display",
   "fontGroup.mono": "Monospace",
+  "fontGroup.detected": "Suggested fonts wey resemble am",
   "fontWeight.100": "Thin",
   "fontWeight.200": "Extra light",
   "fontWeight.300": "Light",
@@ -751,6 +848,8 @@ const pcm = catalog({
 
   "region.alt": "Choose the writing area wey you wan edit",
   "region.selectText": "Select writing",
+  "grid.show": "Show grid",
+  "grid.hide": "Hide grid",
   "zoom.reset": "Reset zoom go original size",
 
   "export.couldNot": "E no fit export",
@@ -794,8 +893,11 @@ const pcm = catalog({
 
 const ar = catalog({
   "nav.primary": "رئيسي",
+  "nav.home": "الرئيسية",
   "nav.howItWorks": "شكر وتقدير",
   "nav.language": "اللغة",
+  "footer.nav": "تذييل",
+  "footer.copyright": "© {year} pngn",
 
   "title.home": "غيّر النص في أي صورة",
   "title.howItWorks": "شكر وتقدير - pngn",
@@ -813,6 +915,7 @@ const ar = catalog({
   "landing.privacy": "لا نخزّن الصور المرفوعة، وهي لا تغادر هذا المتصفح.",
 
   "app.newImage": "صورة جديدة",
+  "app.restart": "إعادة البدء",
   "app.dragHint": "اسحب مربعًا حول النص الذي تريد تغييره. مرّر للتكبير.",
   "app.editSelected": "تعديل النص المحدد",
   "app.processing": "جارٍ المعالجة…",
@@ -844,6 +947,7 @@ const ar = catalog({
   "app.selectLayerToApply": "حدد طبقة نص للتطبيق.",
   "app.doneEditing": "أنهيت التعديل؟",
   "app.exportFormat": "صيغة التصدير",
+  "app.exportModalTitle": "تصدير الصورة",
   "app.export": "تصدير",
   "app.exporting": "جارٍ التصدير…",
   "layers.title": "الطبقات",
@@ -863,6 +967,17 @@ const ar = catalog({
   "stage.ready": "جاهز للتعديل",
   "stage.failed": "فشلت المعالجة",
 
+  "loading.peckingPixels": "ينقر على البكسلات",
+  "loading.pickingTypeface": "يختار حرفاً مطبعياً",
+  "loading.brushingIceberg": "يمسح الجبل الجليدي",
+  "loading.sortingFeathers": "يرتب الريش",
+  "loading.rufflingLetters": "ينفش الحروف",
+  "loading.polishingBeak": "يلمع المنقار",
+  "loading.waddlingGlyphs": "يتمايل بين الحروف",
+  "loading.slidingSerifs": "ينزلق على الزوائد",
+  "loading.huddlingLetters": "يحضن الحروف",
+  "loading.fishingFonts": "يصطاد الخطوط",
+
   "error.chooseImageType": "اختر صورة PNG أو JPEG أو WebP.",
   "error.decodeFailed": "تعذر على المتصفح فك ترميز هذه الصورة.",
   "error.processingFailed": "فشلت المعالجة.",
@@ -881,6 +996,7 @@ const ar = catalog({
   "toolbar.font": "الخط",
   "toolbar.fontError": "تعذر تحميل هذا الخط. سيُستخدم خط النظام بدلًا منه.",
   "toolbar.fontEmpty": "لم يُعثر على خطوط",
+  "toolbar.fontMatchPending": "جارٍ مطابقة الخط…",
   "toolbar.size": "الحجم",
   "toolbar.weight": "السُمك",
   "toolbar.color": "اللون",
@@ -894,6 +1010,7 @@ const ar = catalog({
   "fontGroup.serif": "بتذييل",
   "fontGroup.display": "عرض",
   "fontGroup.mono": "ثابت العرض",
+  "fontGroup.detected": "خطوط مشابهة مقترحة",
   "fontWeight.100": "رفيع جدًا",
   "fontWeight.200": "رفيع إضافي",
   "fontWeight.300": "رفيع",
@@ -906,6 +1023,8 @@ const ar = catalog({
 
   "region.alt": "اختر منطقة النص للتعديل",
   "region.selectText": "تحديد النص",
+  "grid.show": "إظهار الشبكة",
+  "grid.hide": "إخفاء الشبكة",
   "zoom.reset": "إعادة التكبير إلى الحجم الأصلي",
 
   "export.couldNot": "تعذر التصدير",

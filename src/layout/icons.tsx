@@ -19,6 +19,23 @@ export const PlusIcon = ({ size = 16 }: IconProps) => (
   </svg>
 )
 
+export const XIcon = ({ size = 16 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M18 6 6 18" />
+    <path d="m6 6 12 12" />
+  </svg>
+)
+
 export const PencilIcon = ({ size = 16 }: IconProps) => (
   <svg
     width={size}
@@ -56,6 +73,23 @@ export const ImagePlusIcon = ({ size = 16 }: IconProps) => (
   </svg>
 )
 
+export const RestartIcon = ({ size = 16 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+    <path d="M3 3v5h5" />
+  </svg>
+)
+
 export const DownloadIcon = ({ size = 16 }: IconProps) => (
   <svg
     width={size}
@@ -71,6 +105,26 @@ export const DownloadIcon = ({ size = 16 }: IconProps) => (
     <path d="M12 3v12" />
     <path d="m7 10 5 5 5-5" />
     <path d="M5 21h14" />
+  </svg>
+)
+
+export const GridIcon = ({ size = 16 }: IconProps) => (
+  <svg
+    width={size}
+    height={size}
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <rect x="4" y="4" width="16" height="16" rx="2" />
+    <path d="M4 9.33h16" />
+    <path d="M4 14.67h16" />
+    <path d="M9.33 4v16" />
+    <path d="M14.67 4v16" />
   </svg>
 )
 

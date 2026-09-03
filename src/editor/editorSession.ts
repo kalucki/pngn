@@ -6,6 +6,7 @@ import {
 } from './imageZoom'
 
 export const EDITOR_ZOOM_STORAGE_KEY = 'txtimg.editor.zoom'
+export const EDITOR_SHOW_GRID_STORAGE_KEY = 'txtimg.editor.showGrid'
 
 type StoredEditorZoom = {
   documentKey: string
@@ -64,6 +65,22 @@ export const writeEditorZoom = (documentKey: string, zoom: ZoomTransform) => {
   try {
     const payload: StoredEditorZoom = { documentKey, zoom }
     sessionStorage.setItem(EDITOR_ZOOM_STORAGE_KEY, JSON.stringify(payload))
+  } catch {
+    // Ignore quota / privacy errors.
+  }
+}
+
+export const readShowGrid = () => {
+  try {
+    return localStorage.getItem(EDITOR_SHOW_GRID_STORAGE_KEY) === 'true'
+  } catch {
+    return false
+  }
+}
+
+export const writeShowGrid = (showGrid: boolean) => {
+  try {
+    localStorage.setItem(EDITOR_SHOW_GRID_STORAGE_KEY, showGrid ? 'true' : 'false')
   } catch {
     // Ignore quota / privacy errors.
   }

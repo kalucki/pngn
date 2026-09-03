@@ -18,6 +18,9 @@ import {
   applyCanvasBacking,
   ZOOM_REDRAW_DEBOUNCE_MS,
 } from './imageZoom'
+import { drawCanvasGrid } from './canvasGrid'
+import { readShowGrid, writeShowGrid } from './editorSession'
+import { GridToggleButton } from './GridToggleButton'
 import { ZoomResetButton } from './ZoomResetButton'
 import { useImageZoom } from './useImageZoom'
 
@@ -31,9 +34,10 @@ type EditorCanvasProps = {
   interactionMode?: 'edit' | 'select-region' | 'preview'
   regionSelection?: Bounds | null
   onSelectLayer: (id: string | null) => void
+  onActivateLayer?: (id: string) => void
   onMoveLayer: (id: string, x: number, y: number) => void
   onRotateLayer: (id: string, rotation: number) => void
-  onRegionSelectionChange?: (selection: Bounds) => void
+  onRegionSelectionChange?: (selection: Bounds | null) => void
 }
 
 type DragState =
@@ -55,6 +59,14 @@ type LayerHit = {
   layer: TextLayer
   action: 'move' | 'rotate'
 }
+
+type ClickCandidate = {
+  id: string
+  clientX: number
+  clientY: number
+}
+
+const CLICK_MOVE_THRESHOLD_PX = 5
 
 const ROTATE_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><g fill="none" stroke="#fff" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round"><path d="M25.5 16a9.5 9.5 0 1 1-2.8-6.7"/><path d="M25.5 6.2v7.2h-7.2"/></g><g fill="none" stroke="#111" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M25.5 16a9.5 9.5 0 1 1-2.8-6.7"/><path d="M25.5 6.2v7.2h-7.2"/></g></svg>',
@@ -89,6 +101,7 @@ export const EditorCanvas = ({
   interactionMode = 'edit',
   regionSelection = null,
   onSelectLayer,
+  onActivateLayer,
   onMoveLayer,
   onRotateLayer,
   onRegionSelectionChange,
@@ -96,9 +109,11 @@ export const EditorCanvas = ({
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const dragRef = useRef<DragState | null>(null)
+  const clickCandidateRef = useRef<ClickCandidate | null>(null)
   const regionStartRef = useRef<Point | null>(null)
   const layoutSizeRef = useRef({ width: 0, height: 0 })
   const [layoutSize, setLayoutSize] = useState({ width: 0, height: 0 })
+  const [showGrid, setShowGrid] = useState(readShowGrid)
   const { viewportRef, transform, contentStyle, resetZoom } = useImageZoom(
     documentKey,
     canvasRef,
@@ -189,16 +204,23 @@ export const EditorCanvas = ({
       if (paintLayers === layers) settledLayersRef.current = layers
 
       for (const [index, layer] of layers.entries()) {
-        const { bounds, typography, effects } = layer
+        const { effects } = layer
         const paintLayer = paintLayers[index] ?? layer
         context.save()
         context.globalAlpha = effects.opacity
         applyLayerTransform(context, layer)
         drawLayerText(context, paintLayer)
         context.restore()
+      }
 
+      if (showGrid && interactionMode !== 'preview') {
+        drawCanvasGrid(context, width, height)
+      }
+
+      for (const layer of layers) {
         if (interactionMode === 'preview') continue
 
+        const { bounds, typography } = layer
         const selected = layer.id === selectedLayerId
         const pad =
           layerOutlinePadding(
@@ -265,6 +287,7 @@ export const EditorCanvas = ({
       layers,
       regionSelection,
       selectedLayerId,
+      showGrid,
       syncCanvasLayout,
       width,
     ],
@@ -276,6 +299,10 @@ export const EditorCanvas = ({
     transformRef.current = transform
     drawRef.current = draw
   }, [draw, transform])
+
+  useLayoutEffect(() => {
+    drawRef.current()
+  }, [showGrid])
 
   useEffect(() => {
     const image = new Image()
@@ -339,6 +366,39 @@ export const EditorCanvas = ({
     if (canvas) canvas.style.cursor = ''
   }, [interactionMode])
 
+  useEffect(() => {
+    if (regionSelection !== null) return
+    regionStartRef.current = null
+  }, [regionSelection])
+
+  useEffect(() => {
+    if (interactionMode === 'select-region') return
+    regionStartRef.current = null
+    if (interactionMode === 'preview') dragRef.current = null
+  }, [interactionMode])
+
+  useEffect(() => {
+    if (interactionMode !== 'select-region') return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest('input, textarea, select, [role="combobox"]'))
+      ) {
+        return
+      }
+      if (!regionStartRef.current && !regionSelection) return
+      event.preventDefault()
+      regionStartRef.current = null
+      draw(null)
+      onRegionSelectionChange?.(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [draw, interactionMode, onRegionSelectionChange, regionSelection])
+
   const imagePoint = (
     event: React.PointerEvent<HTMLCanvasElement>,
     clamp = true,
@@ -383,6 +443,7 @@ export const EditorCanvas = ({
 
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const point = imagePoint(event)
+    clickCandidateRef.current = null
     if (interactionMode === 'preview') return
     if (interactionMode === 'select-region') {
       regionStartRef.current = point
@@ -402,6 +463,11 @@ export const EditorCanvas = ({
         center: boundsCenter(hit.layer.bounds),
       }
     } else {
+      clickCandidateRef.current = {
+        id: hit.layer.id,
+        clientX: event.clientX,
+        clientY: event.clientY,
+      }
       dragRef.current = {
         type: 'move',
         id: hit.layer.id,
@@ -416,7 +482,19 @@ export const EditorCanvas = ({
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current
     const point = imagePoint(event, drag?.type !== 'rotate')
+    const clickCandidate = clickCandidateRef.current
+    if (clickCandidate) {
+      const dx = event.clientX - clickCandidate.clientX
+      const dy = event.clientY - clickCandidate.clientY
+      if (dx * dx + dy * dy > CLICK_MOVE_THRESHOLD_PX ** 2) {
+        clickCandidateRef.current = null
+      }
+    }
     if (regionStartRef.current) {
+      if (interactionMode !== 'select-region') {
+        regionStartRef.current = null
+        return
+      }
       const nextSelection = normalizeBounds(regionStartRef.current, point)
       draw(nextSelection)
       return
@@ -450,18 +528,25 @@ export const EditorCanvas = ({
   const handlePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const point = imagePoint(event)
     if (regionStartRef.current) {
-      const nextSelection = normalizeBounds(regionStartRef.current, point)
-      regionStartRef.current = null
-      if (nextSelection.width >= 4 && nextSelection.height >= 4) {
-        draw(nextSelection)
-        onRegionSelectionChange?.(nextSelection)
-      } else {
-        draw(null)
+      if (interactionMode === 'select-region') {
+        const nextSelection = normalizeBounds(regionStartRef.current, point)
+        if (nextSelection.width >= 4 && nextSelection.height >= 4) {
+          draw(nextSelection)
+          onRegionSelectionChange?.(nextSelection)
+        } else {
+          draw(null)
+        }
       }
+      regionStartRef.current = null
     }
+    const clickCandidate = clickCandidateRef.current
+    clickCandidateRef.current = null
     dragRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
+    }
+    if (clickCandidate && interactionMode === 'edit') {
+      onActivateLayer?.(clickCandidate.id)
     }
     updateCursor(event.currentTarget, point, null)
   }
@@ -469,6 +554,14 @@ export const EditorCanvas = ({
   const handlePointerLeave = (event: React.PointerEvent<HTMLCanvasElement>) => {
     if (dragRef.current || regionStartRef.current) return
     event.currentTarget.style.cursor = ''
+  }
+
+  const handleToggleGrid = () => {
+    setShowGrid((current) => {
+      const next = !current
+      writeShowGrid(next)
+      return next
+    })
   }
 
   return (
@@ -488,7 +581,12 @@ export const EditorCanvas = ({
         onPointerCancel={handlePointerUp}
         onPointerLeave={handlePointerLeave}
       />
-      <ZoomResetButton scale={transform.scale} onReset={resetZoom} />
+      <div className="canvas-overlay-controls canvas-overlay-controls-start">
+        <GridToggleButton pressed={showGrid} onToggle={handleToggleGrid} />
+      </div>
+      <div className="canvas-overlay-controls canvas-overlay-controls-end">
+        <ZoomResetButton scale={transform.scale} onReset={resetZoom} />
+      </div>
     </div>
   )
 }

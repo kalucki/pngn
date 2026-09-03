@@ -2,6 +2,7 @@ import { useEffect } from 'react'
 import { trackPageView } from './analytics'
 import { App } from './App'
 import { useLocale } from './i18n/useLocale'
+import { Footer } from './layout/Footer'
 import { NavBar } from './layout/NavBar'
 import { EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH, usePath } from './navigation'
 import { ExportPage } from './pages/Export'
@@ -43,6 +44,7 @@ export const Root = () => {
           {onFaq ? <Faq /> : null}
         </>
       )}
+      <Footer />
     </>
   )
 }

@@ -48,13 +48,30 @@ const fillPath = (
 ) =>
   `${strokePath(baseY, amplitude, phase, detail)}L${WAVE_VIEW_W + 48} ${WAVE_VIEW_H}L-48 ${WAVE_VIEW_H}Z`;
 
+const WAVE_BASE = [0xf4, 0x8b, 0x77] as const;
+const WAVE_MIX = 0.49;
+
+const waveWash = (amount: number) => {
+  const mix = amount * WAVE_MIX;
+  const channel = (value: number) =>
+    Math.round(255 + (value - 255) * mix)
+      .toString(16)
+      .padStart(2, "0");
+  return `#${channel(WAVE_BASE[0])}${channel(WAVE_BASE[1])}${channel(WAVE_BASE[2])}`;
+};
+
+const waveSky = {
+  mid: waveWash(0.09),
+  deep: waveWash(0.92),
+};
+
 const waveBands = [
-  { y: 236, amp: 62, phase: 0.14, fill: "#ffffff", opacity: 0.5 },
-  { y: 352, amp: 72, phase: 0.2, fill: "#f3f1ea", opacity: 0.68 },
-  { y: 468, amp: 78, phase: 0.27, fill: "#ebe7df", opacity: 0.8 },
-  { y: 584, amp: 74, phase: 0.33, fill: "#e3dfd6", opacity: 0.9 },
-  { y: 700, amp: 62, phase: 0.4, fill: "#dbd6cc", opacity: 0.96 },
-  { y: 808, amp: 46, phase: 0.47, fill: "#d5d0c6", opacity: 1 },
+  { y: 236, amp: 62, phase: 0.14, fill: waveWash(0), opacity: 0.5 },
+  { y: 352, amp: 72, phase: 0.2, fill: waveWash(0.3), opacity: 0.68 },
+  { y: 468, amp: 78, phase: 0.27, fill: waveWash(0.51), opacity: 0.8 },
+  { y: 584, amp: 74, phase: 0.33, fill: waveWash(0.68), opacity: 0.9 },
+  { y: 700, amp: 62, phase: 0.4, fill: waveWash(0.87), opacity: 0.96 },
+  { y: 808, amp: 46, phase: 0.47, fill: waveWash(1), opacity: 1 },
 ].map((band) => ({
   ...band,
   d: fillPath(band.y, band.amp, band.phase),
@@ -92,8 +109,8 @@ const LandingWaves = () => {
       <defs>
         <linearGradient id={skyId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#ffffff" />
-          <stop offset="0.36" stopColor="#fbfaf8" />
-          <stop offset="1" stopColor="#d8d4cb" />
+          <stop offset="0.36" stopColor={waveSky.mid} />
+          <stop offset="1" stopColor={waveSky.deep} />
         </linearGradient>
       </defs>
       <rect width={WAVE_VIEW_W} height={WAVE_VIEW_H} fill={`url(#${skyId})`} />

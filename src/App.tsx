@@ -9,10 +9,8 @@ import type {
 } from "./document/types";
 import { editorDocumentKey } from "./editor/editorSession";
 import { EditorCanvas } from "./editor/EditorCanvas";
-import {
-  EXPORT_PREVIEW_ID,
-  LayersPanel,
-} from "./editor/LayersPanel";
+import { EXPORT_PREVIEW_ID, LayersPanel } from "./editor/LayersPanel";
+import { ExportModal } from "./editor/ExportModal";
 import {
   downloadFromUrl,
   exportFileName,
@@ -20,6 +18,13 @@ import {
   type ExportFormat,
 } from "./editor/exportImage";
 import { stashExport } from "./editor/exportTransfer";
+import { prefetchFontIdModel } from "./fonts/fontModelCache";
+import { warmupFontIdWorker } from "./fonts/fontIdClient";
+import {
+  markPendingFontMatches,
+  matchTextLayerFonts,
+  mergeMatchedFontLayer,
+} from "./fonts/matchTextLayerFont";
 import { isMonospaceFont } from "./editor/fonts";
 import {
   adoptRegionLayers,
@@ -35,6 +40,7 @@ import { FlowSteps } from "./layout/FlowSteps";
 import { HintTooltip } from "./layout/HintTooltip";
 import { LandingSeo } from "./layout/LandingSeo";
 import { LandingStage } from "./layout/LandingStage";
+import { LoadingToast } from "./layout/LoadingToast";
 import {
   AlertCircleIcon,
   DownloadIcon,
@@ -42,6 +48,8 @@ import {
   ImagePlusIcon,
   PencilIcon,
   PlusIcon,
+  RestartIcon,
+  XIcon,
 } from "./layout/icons";
 import { EXPORT_PATH, navigate } from "./navigation";
 import { processImage, warmupProcessingWorker } from "./processing/client";
@@ -75,7 +83,7 @@ type ReconstructionChoice = "auto" | NeuralInpaintModel;
 const initialOptions: ProcessingOptions = {
   method: "auto",
   maskThreshold: 34,
-  maskDilation: 2,
+  maskDilation: 4,
 };
 
 const reconstructionMethods: {
@@ -104,39 +112,9 @@ const reconstructionMethods: {
   },
 ];
 
-const neuralModelFor = (method: ProcessingOptions["method"]): NeuralInpaintModel =>
-  method === "migan" ? "migan" : "lama";
-
-type UiStage =
-  | "waiting"
-  | "reading"
-  | "loadingModels"
-  | "ocr"
-  | "masking"
-  | "reconstruction"
-  | "ready"
-  | "failed";
-
-const progressStage: Record<
-  "loading-models" | "ocr" | "masking" | "reconstruction",
-  UiStage
-> = {
-  "loading-models": "loadingModels",
-  ocr: "ocr",
-  masking: "masking",
-  reconstruction: "reconstruction",
-};
-
-const stageMessage: Record<UiStage, MessageKey> = {
-  waiting: "stage.waiting",
-  reading: "stage.reading",
-  loadingModels: "stage.loadingModels",
-  ocr: "stage.ocr",
-  masking: "stage.masking",
-  reconstruction: "stage.reconstruction",
-  ready: "stage.ready",
-  failed: "stage.failed",
-};
+const neuralModelFor = (
+  method: ProcessingOptions["method"],
+): NeuralInpaintModel => (method === "migan" ? "migan" : "lama");
 
 const canvasToPng = (canvas: HTMLCanvasElement) =>
   new Promise<Blob>((resolve, reject) => {
@@ -229,14 +207,15 @@ export const App = () => {
   const [selection, setSelection] = useState<Bounds | null>(null);
   const [options, setOptions] = useState<ProcessingOptions>(initialOptions);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [textFocusKey, setTextFocusKey] = useState(0);
   const [progress, setProgress] = useState(0);
-  const [stage, setStage] = useState<UiStage>("waiting");
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("image/png");
   const [isAddingRegion, setIsAddingRegion] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [exportModalOpen, setExportModalOpen] = useState(false);
   const [regions, setRegions] = useState<ProcessedRegion[]>([]);
   const processingGenerationRef = useRef(0);
   const regionsRef = useRef<ProcessedRegion[]>([]);
@@ -270,6 +249,7 @@ export const App = () => {
   );
   const documentKey =
     file && source ? editorDocumentKey(file, source.width, source.height) : "";
+  const isBusy = isProcessing || isExporting;
 
   useEffect(
     () => () => {
@@ -296,7 +276,6 @@ export const App = () => {
     setIsProcessing(true);
     setError(null);
     setProgress(0.02);
-    setStage("reading");
 
     try {
       const processed = await processImage(
@@ -304,9 +283,8 @@ export const App = () => {
         file.type,
         activeSelection,
         activeOptions,
-        (nextStage, nextProgress) => {
+        (_nextStage, nextProgress) => {
           if (generation !== processingGenerationRef.current) return;
-          setStage(progressStage[nextStage]);
           setProgress(nextProgress);
         },
       );
@@ -322,17 +300,18 @@ export const App = () => {
       const previousLayers = existing
         ? currentLayers.filter((layer) => existing.layerIds.includes(layer.id))
         : [];
-      const nextRegionLayers = adoptRegionLayers(
+      const adoptedRegionLayers = adoptRegionLayers(
         previousLayers,
         processed.textLayers,
         regionId,
       );
+      const nextRegionLayers = markPendingFontMatches(adoptedRegionLayers);
       const nextRegion: ProcessedRegion = {
         id: regionId,
         selection: activeSelection,
         options: activeOptions,
         layerIds: nextRegionLayers.map((layer) => layer.id),
-        processed,
+        processed: { ...processed, textLayers: nextRegionLayers },
       };
       const nextRegions = existing
         ? currentRegions.map((region) =>
@@ -380,7 +359,49 @@ export const App = () => {
         setIsAddingRegion(false);
       }
       setProgress(1);
-      setStage("ready");
+      if (file) {
+        const applyMatchedLayer = (matched: TextLayer) => {
+          console.info("[pngn font] applying match", {
+            text: matched.originalText.slice(0, 32),
+            applied: matched.typography.fontFamily,
+            suggested: matched.fontMatch?.family,
+            status: matched.fontMatch?.status,
+          });
+          setLayers((current) =>
+            current.map((layer) => mergeMatchedFontLayer(layer, matched)),
+          );
+          setRegions((current) =>
+            current.map((region) =>
+              region.layerIds.includes(matched.id)
+                ? {
+                    ...region,
+                    processed: {
+                      ...region.processed,
+                      textLayers: region.processed.textLayers.map((layer) =>
+                        mergeMatchedFontLayer(layer, matched),
+                      ),
+                    },
+                  }
+                : region,
+            ),
+          );
+          setResult((current) =>
+            current
+              ? {
+                  ...current,
+                  textLayers: current.textLayers.map((layer) =>
+                    mergeMatchedFontLayer(layer, matched),
+                  ),
+                }
+              : current,
+          );
+        };
+        void matchTextLayerFonts(file, nextRegionLayers, applyMatchedLayer).catch(
+          (error) => {
+            console.warn("[pngn font] matching failed:", error);
+          },
+        );
+      }
     } catch (processingError) {
       if (generation !== processingGenerationRef.current) return;
       setError(
@@ -388,7 +409,6 @@ export const App = () => {
           ? processingError.message
           : "Processing failed.",
       );
-      setStage("failed");
     } finally {
       if (generation === processingGenerationRef.current) {
         isProcessingRef.current = false;
@@ -423,7 +443,35 @@ export const App = () => {
     warmupProcessingWorker();
     warmupInpaintWorker();
     warmupOpenCvWorker();
+    warmupFontIdWorker();
   }, []);
+
+  useEffect(() => {
+    const selectingInitial = Boolean(source && (!result || !urls));
+    if (!selectingInitial && !isAddingRegion) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || isProcessing) return;
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest('input, textarea, select, [role="combobox"]'))
+      ) {
+        return;
+      }
+      if (!isAddingRegion && !selection) return;
+      event.preventDefault();
+      setSelection(null);
+      if (isAddingRegion) {
+        setIsAddingRegion(false);
+        setSelectedLayerId(null);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isAddingRegion, isProcessing, result, selection, source, urls]);
 
   useEffect(() => {
     if (!file || isAddingRegion || isProcessing) return;
@@ -469,17 +517,26 @@ export const App = () => {
       setFile(nextFile);
       setSource(nextSource);
       prefetchInpaintModel(neuralModelFor(options.method));
-      setSelection(null);
-      setResult(null);
-      setUrls(null);
-      setLayers([]);
-      setSelectedLayerId(null);
-      setIsAddingRegion(false);
-      setError(null);
-      setRegions([]);
+      prefetchFontIdModel();
+      resetToUploadedImage();
     } catch {
       setError("This image could not be decoded by the browser.");
     }
+  };
+
+  const resetToUploadedImage = () => {
+    processingGenerationRef.current += 1;
+    isProcessingRef.current = false;
+    setIsProcessing(false);
+    setProgress(0);
+    setError(null);
+    setSelection(null);
+    setResult(null);
+    setUrls(null);
+    setLayers([]);
+    setSelectedLayerId(null);
+    setIsAddingRegion(false);
+    setRegions([]);
   };
 
   const updateLayer = (nextLayer: TextLayer) => {
@@ -525,6 +582,10 @@ export const App = () => {
     if (source === "sidebar" && id && id !== EXPORT_PREVIEW_ID) {
       requestApplyToLayer(id);
     }
+  };
+
+  const handleActivateLayer = () => {
+    setTextFocusKey((key) => key + 1);
   };
 
   const moveLayer = (id: string, x: number, y: number) => {
@@ -583,6 +644,7 @@ export const App = () => {
         );
         const pending = stashExport(blob, filename);
         downloadFromUrl(pending.url, pending.filename);
+        setExportModalOpen(false);
         navigate(EXPORT_PATH);
       } catch (exportError) {
         setError(
@@ -594,37 +656,57 @@ export const App = () => {
     })();
   };
 
+  const exportControl =
+    urls && result ? (
+      <button
+        type="button"
+        className="button-with-icon sidebar-export-button"
+        disabled={isBusy}
+        onClick={() => setExportModalOpen(true)}
+      >
+        <DownloadIcon />
+        {t("app.export")}
+      </button>
+    ) : null;
+
   const newImageControl = (
-    <label className="upload-button">
+    <label
+      className={`upload-button${isBusy ? " is-disabled" : ""}`}
+      aria-disabled={isBusy}
+    >
       <ImagePlusIcon />
       {t("app.newImage")}
       <input
         type="file"
         accept="image/png,image/jpeg,image/webp"
+        disabled={isBusy}
         onChange={(event) => void handleFile(event.target.files?.[0])}
       />
     </label>
   );
 
-  const statusCard =
-    isProcessing || error ? (
-      <section className={`status-card ${error ? "error" : ""}`}>
-        {error ? (
-          <div>
-            <AlertCircleIcon />
-            <span>{translateError(error)}</span>
-          </div>
-        ) : (
-          <>
-            <div>
-              <strong>{t(stageMessage[stage])}</strong>
-              <span>{Math.round(progress * 100)}%</span>
-            </div>
-            <progress max="1" value={progress} />
-          </>
-        )}
-      </section>
-    ) : null;
+  const restartControl = (
+    <button
+      type="button"
+      className="button-with-icon upload-button"
+      disabled={isBusy}
+      onClick={resetToUploadedImage}
+    >
+      <RestartIcon />
+      {t("app.restart")}
+    </button>
+  );
+
+  const statusCard = error ? (
+    <section className="status-card error">
+      <div>
+        <AlertCircleIcon />
+        <span>{translateError(error)}</span>
+      </div>
+    </section>
+  ) : isProcessing ? (
+    <LoadingToast progress={progress} />
+  ) : null;
 
   const processingControls = (
     <section className="processing-controls">
@@ -797,8 +879,18 @@ export const App = () => {
           <aside className="editor-sidebar">
             <div className="sidebar-header">
               <h1 className="visually-hidden">{t("title.home")}</h1>
+              {exportControl}
               {newImageControl}
+              {restartControl}
             </div>
+            <ExportModal
+              opened={exportModalOpen}
+              format={exportFormat}
+              isExporting={isExporting}
+              onClose={() => setExportModalOpen(false)}
+              onFormatChange={setExportFormat}
+              onExport={handleExport}
+            />
             <LayersPanel
               layers={layers}
               selectedLayerId={selectedLayerId}
@@ -813,6 +905,7 @@ export const App = () => {
                 <button
                   type="button"
                   className={`button-with-icon${isAddingRegion ? " secondary-button" : ""}`}
+                  disabled={isProcessing}
                   onClick={() => {
                     setIsAddingRegion((current) => !current);
                     setSelection(null);
@@ -847,48 +940,41 @@ export const App = () => {
               {!result || !urls ? (
                 <div className="selection-hint">
                   <p>{t("app.dragHint")}</p>
-                  <button
-                    type="button"
-                    className={`button-with-icon${hasValidSelection ? " is-ready" : ""}`}
-                    disabled={isProcessing || !hasValidSelection}
-                    aria-hidden={!hasValidSelection}
-                    tabIndex={hasValidSelection ? undefined : -1}
-                    onClick={requestProcessing}
+                  <div
+                    className={`selection-actions${hasValidSelection ? " is-ready" : ""}`}
                   >
-                    <PencilIcon />
-                    {isProcessing ? t("app.processing") : t("app.editSelected")}
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <TextToolbar layer={selectedLayer} onChange={updateLayer} />
-                  <div className="export-bar">
-                    <Select
-                      size="xs"
-                      className="export-format-select"
-                      aria-label={t("app.exportFormat")}
-                      comboboxProps={{ width: "target", shadow: "md", withinPortal: true }}
-                      value={exportFormat}
-                      data={[
-                        { value: "image/png", label: "PNG" },
-                        { value: "image/jpeg", label: "JPEG" },
-                        { value: "image/webp", label: "WebP" },
-                      ]}
-                      onChange={(value) => {
-                        if (value) setExportFormat(value as ExportFormat);
-                      }}
-                    />
+                    <button
+                      type="button"
+                      className="button-with-icon secondary-button"
+                      disabled={isProcessing || !hasValidSelection}
+                      aria-hidden={!hasValidSelection}
+                      tabIndex={hasValidSelection ? undefined : -1}
+                      onClick={() => setSelection(null)}
+                    >
+                      <XIcon />
+                      {t("app.cancel")}
+                    </button>
                     <button
                       type="button"
                       className="button-with-icon"
-                      disabled={isExporting}
-                      onClick={handleExport}
+                      disabled={isProcessing || !hasValidSelection}
+                      aria-hidden={!hasValidSelection}
+                      tabIndex={hasValidSelection ? undefined : -1}
+                      onClick={requestProcessing}
                     >
-                      <DownloadIcon />
-                      {isExporting ? t("app.exporting") : t("app.export")}
+                      <PencilIcon />
+                      {isProcessing
+                        ? t("app.processing")
+                        : t("app.editSelected")}
                     </button>
                   </div>
-                </>
+                </div>
+              ) : (
+                <TextToolbar
+                  layer={selectedLayer}
+                  onChange={updateLayer}
+                  textFocusKey={textFocusKey}
+                />
               )}
             </div>
 
@@ -900,6 +986,7 @@ export const App = () => {
                   width={source.width}
                   height={source.height}
                   selection={selection}
+                  disabled={isProcessing}
                   onChange={setSelection}
                 />
               ) : (
@@ -911,14 +998,17 @@ export const App = () => {
                   layers={layers}
                   selectedLayerId={selectedLayerId}
                   interactionMode={
-                    isAddingRegion
-                      ? "select-region"
-                      : selectedLayerId === EXPORT_PREVIEW_ID
-                        ? "preview"
-                        : "edit"
+                    isProcessing
+                      ? "preview"
+                      : isAddingRegion
+                        ? "select-region"
+                        : selectedLayerId === EXPORT_PREVIEW_ID
+                          ? "preview"
+                          : "edit"
                   }
                   regionSelection={selection}
                   onSelectLayer={handleSelectLayer}
+                  onActivateLayer={handleActivateLayer}
                   onMoveLayer={moveLayer}
                   onRotateLayer={rotateLayer}
                   onRegionSelectionChange={setSelection}

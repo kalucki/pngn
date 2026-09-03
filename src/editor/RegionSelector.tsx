@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { Bounds } from '../document/types'
 import { useLocale } from '../i18n/useLocale'
 import {
@@ -15,7 +15,8 @@ type RegionSelectorProps = {
   width: number
   height: number
   selection: Bounds | null
-  onChange: (selection: Bounds) => void
+  disabled?: boolean
+  onChange: (selection: Bounds | null) => void
 }
 
 export const RegionSelector = ({
@@ -24,6 +25,7 @@ export const RegionSelector = ({
   width,
   height,
   selection,
+  disabled = false,
   onChange,
 }: RegionSelectorProps) => {
   const { t } = useLocale()
@@ -39,9 +41,40 @@ export const RegionSelector = ({
   )
 
   useLayoutEffect(() => {
+    if (selection === null) {
+      startRef.current = null
+      setDraft(null)
+      return
+    }
     if (startRef.current) return
     setDraft(selection)
   }, [selection])
+
+  useEffect(() => {
+    if (!disabled) return
+    startRef.current = null
+  }, [disabled])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return
+      const target = event.target
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest('input, textarea, select, [role="combobox"]'))
+      ) {
+        return
+      }
+      if (disabled || (!startRef.current && !selection)) return
+      event.preventDefault()
+      startRef.current = null
+      setDraft(null)
+      onChange(null)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [disabled, onChange, selection])
 
   const visible = draft && draft.width >= 1 && draft.height >= 1 ? draft : null
 
@@ -69,6 +102,7 @@ export const RegionSelector = ({
   }
 
   const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (disabled) return
     event.preventDefault()
     startRef.current = imagePoint(event)
     event.currentTarget.setPointerCapture(event.pointerId)
@@ -76,12 +110,12 @@ export const RegionSelector = ({
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!startRef.current) return
+    if (disabled || !startRef.current) return
     setDraft(normalizeBounds(startRef.current, imagePoint(event)))
   }
 
   const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!startRef.current) return
+    if (disabled || !startRef.current) return
     const nextSelection = normalizeBounds(startRef.current, imagePoint(event))
     startRef.current = null
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
@@ -99,7 +133,7 @@ export const RegionSelector = ({
     <div ref={viewportRef} className="region-selector">
       <div
         ref={frameRef}
-        className="region-selector-frame"
+        className={`region-selector-frame${disabled ? ' is-locked' : ''}`}
         style={{
           ['--image-w' as string]: width,
           ['--image-h' as string]: height,

@@ -1,3 +1,5 @@
+import { resolveGoogleFontFamily } from '../fonts/googleFontFamily'
+
 export type FontCategory = 'system' | 'sans' | 'serif' | 'display' | 'mono'
 
 export type FontDefinition = {
@@ -240,6 +242,7 @@ export type ParsedFontFace = {
 const loadedFaces = new Map<string, Promise<void>>()
 const readyFaces = new Set<string>()
 const failedFaces = new Set<string>()
+const detectedFaces = new Map<string, FontDefinition>()
 
 const FONT_FALLBACKS: Record<Exclude<FontCategory, 'system'>, string> = {
   sans: 'Arial, Helvetica, sans-serif',
@@ -266,10 +269,47 @@ const fallbackStack = (family: string) => {
 }
 
 export const fontByFamily = (family: string) =>
-  FONT_CATALOG.find((font) => font.family === family)
+  FONT_CATALOG.find((font) => font.family === family) ?? detectedFaces.get(family)
 
 export const fontsInCategory = (category: FontCategory) =>
-  FONT_CATALOG.filter((font) => font.category === category)
+  [
+    ...FONT_CATALOG.filter((font) => font.category === category),
+    ...[...detectedFaces.values()].filter((font) => font.category === category),
+  ]
+
+export const detectedFonts = () => [...detectedFaces.values()]
+
+export const registerDetectedFonts = (
+  fonts: Array<{ family: string; weight: number }>,
+) => {
+  let changed = false
+  for (const font of fonts) {
+    if (!font.family) continue
+    const resolved = resolveGoogleFontFamily(font.family)
+    const family = resolved?.family ?? font.family
+    const existing = fontByFamily(family)
+    if (existing && FONT_CATALOG.some((item) => item.family === family)) {
+      continue
+    }
+    const detectedWeight = resolved
+      ? nearestWeight(resolved.weights, font.weight)
+      : font.weight
+    const weights = existing
+      ? [...new Set([...existing.weights, detectedWeight])].sort((a, b) => a - b)
+      : resolved
+        ? [...new Set([detectedWeight, ...resolved.weights])].sort((a, b) => a - b)
+        : [detectedWeight]
+    if (existing && existing.source === 'system') continue
+    detectedFaces.set(family, {
+      family,
+      category: existing?.category ?? 'sans',
+      source: 'google',
+      weights,
+    })
+    changed = true
+  }
+  return changed
+}
 
 export const isMonospaceFont = (family: string) =>
   fontByFamily(family)?.category === 'mono' || family === 'Courier New'
@@ -415,11 +455,20 @@ export const ensureFont = async (
   weight: number,
   retry = false,
 ) => {
-  const font = fontByFamily(family)
+  const resolved = resolveGoogleFontFamily(family)
+  const font = fontByFamily(resolved?.family ?? family)
   if (!font || font.source !== 'google') return
 
-  const resolvedWeight = nearestWeight(font.weights, weight)
-  const key = fontCacheKey(font.family, resolvedWeight)
+  const resolvedWeight = nearestWeight(
+    resolved?.weights ?? font.weights,
+    weight,
+  )
+  const faceFamily = resolved?.family ?? font.family
+  const key = fontCacheKey(faceFamily, resolvedWeight)
+  if (!resolved) {
+    failedFaces.add(key)
+    return
+  }
   if (retry) {
     loadedFaces.delete(key)
     failedFaces.delete(key)
@@ -430,7 +479,7 @@ export const ensureFont = async (
   const pending = loadedFaces.get(key)
   if (pending) return pending
 
-  const loading = loadGoogleFont(font.family, resolvedWeight)
+  const loading = loadGoogleFont(faceFamily, resolvedWeight)
     .then(() => {
       readyFaces.add(key)
       failedFaces.delete(key)

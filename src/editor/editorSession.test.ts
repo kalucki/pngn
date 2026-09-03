@@ -1,40 +1,50 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  EDITOR_SHOW_GRID_STORAGE_KEY,
   EDITOR_ZOOM_STORAGE_KEY,
   editorDocumentKey,
   parseZoomTransform,
   readEditorZoom,
+  readShowGrid,
+  writeShowGrid,
   writeEditorZoom,
 } from './editorSession'
 import { IDENTITY_ZOOM, MAX_ZOOM } from './imageZoom'
 
-const memory = new Map<string, string>()
+const sessionMemory = new Map<string, string>()
+const localMemory = new Map<string, string>()
 
-const installSessionStorage = () => {
-  const storage: Storage = {
-    get length() {
-      return memory.size
-    },
-    clear: () => memory.clear(),
-    getItem: (key) => memory.get(key) ?? null,
-    key: (index) => [...memory.keys()][index] ?? null,
-    removeItem: (key) => {
-      memory.delete(key)
-    },
-    setItem: (key, value) => {
-      memory.set(key, value)
-    },
-  }
+const createStorage = (memory: Map<string, string>): Storage => ({
+  get length() {
+    return memory.size
+  },
+  clear: () => memory.clear(),
+  getItem: (key) => memory.get(key) ?? null,
+  key: (index) => [...memory.keys()][index] ?? null,
+  removeItem: (key) => {
+    memory.delete(key)
+  },
+  setItem: (key, value) => {
+    memory.set(key, value)
+  },
+})
+
+const installStorage = () => {
   Object.defineProperty(globalThis, 'sessionStorage', {
     configurable: true,
-    value: storage,
+    value: createStorage(sessionMemory),
+  })
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: createStorage(localMemory),
   })
 }
 
 describe('editor session zoom', () => {
   beforeEach(() => {
-    memory.clear()
-    installSessionStorage()
+    sessionMemory.clear()
+    localMemory.clear()
+    installStorage()
   })
 
   it('builds a stable key from the source file and dimensions', () => {
@@ -75,5 +85,29 @@ describe('editor session zoom', () => {
     })
     expect(parseZoomTransform({ scale: 2, x: Number.NaN, y: 0 })).toBeNull()
     expect(parseZoomTransform({ scale: 1, x: 8, y: 9 })).toEqual(IDENTITY_ZOOM)
+  })
+})
+
+describe('editor grid preference', () => {
+  beforeEach(() => {
+    sessionMemory.clear()
+    localMemory.clear()
+    installStorage()
+  })
+
+  it('defaults to hidden when nothing is stored', () => {
+    expect(readShowGrid()).toBe(false)
+  })
+
+  it('round-trips the grid preference in local storage', () => {
+    writeShowGrid(true)
+    expect(readShowGrid()).toBe(true)
+    writeShowGrid(false)
+    expect(readShowGrid()).toBe(false)
+  })
+
+  it('treats invalid stored values as hidden', () => {
+    localStorage.setItem(EDITOR_SHOW_GRID_STORAGE_KEY, '{not json')
+    expect(readShowGrid()).toBe(false)
   })
 })

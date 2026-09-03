@@ -158,12 +158,22 @@ const seoFiles = (origin: string): Plugin => {
   }
 }
 
+const rootHrefFallback = (): Plugin => ({
+  name: 'root-href-fallback',
+  transformIndexHtml: {
+    order: 'pre',
+    handler(html) {
+      return html.replaceAll('href="/"', 'href="/index.html"')
+    },
+  },
+})
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const siteOrigin = (env.VITE_SITE_ORIGIN ?? '').replace(/\/+$/, '')
 
   return {
-    plugins: [react(), serveModelFiles(), seoFiles(siteOrigin)],
+    plugins: [rootHrefFallback(), react(), serveModelFiles(), seoFiles(siteOrigin)],
     worker: {
       format: 'es',
     },
@@ -173,7 +183,10 @@ export default defineConfig(({ mode }) => {
         'Cross-Origin-Opener-Policy': 'same-origin',
       },
       watch: {
-        ignored: ['**/public/models/inpaint/**/*.onnx'],
+        ignored: [
+          '**/public/models/inpaint/**/*.onnx',
+          '**/public/models/font/**/*.onnx',
+        ],
       },
     },
     preview: {

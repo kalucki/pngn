@@ -51,6 +51,15 @@ export type TextLayer = {
   effects: {
     opacity: number
   }
+  fontMatch?: {
+    family: string
+    weight: number
+    italic: boolean
+    score: number
+    status: 'pending' | 'ready' | 'skipped' | 'error'
+    requestId?: string
+    similar: Array<{ family: string; weight: number }>
+  }
   processing: {
     recognitionConfidence: number
     maskConfidence: number

@@ -3,12 +3,14 @@ import {
   canvasFont,
   ensureFont,
   FONT_CATALOG,
+  detectedFonts,
   googleCssUrl,
   isFontFailed,
   isMonospaceFont,
   latinFontFaces,
   nearestWeight,
   parseGoogleFontCss,
+  registerDetectedFonts,
   withSettledFonts,
 } from './fonts'
 
@@ -22,6 +24,31 @@ describe('font catalog', () => {
     expect(isMonospaceFont('JetBrains Mono')).toBe(true)
     expect(isMonospaceFont('Courier New')).toBe(true)
     expect(isMonospaceFont('Inter')).toBe(false)
+  })
+
+  it('registers detected Google Fonts outside the starter catalog', () => {
+    registerDetectedFonts([
+      { family: 'Abril Fatface', weight: 400 },
+      { family: 'New Candidate Font', weight: 700 },
+      { family: 'Shippori Mincho B 1', weight: 800 },
+    ])
+    expect(detectedFonts().some((font) => font.family === 'Inter')).toBe(false)
+    expect(
+      detectedFonts().find((font) => font.family === 'New Candidate Font'),
+    ).toMatchObject({
+      category: 'sans',
+      source: 'google',
+      weights: [700],
+    })
+    expect(
+      detectedFonts().find((font) => font.family === 'Shippori Mincho B1'),
+    ).toMatchObject({
+      family: 'Shippori Mincho B1',
+      source: 'google',
+    })
+    expect(
+      detectedFonts().some((font) => font.family === 'Shippori Mincho B 1'),
+    ).toBe(false)
   })
 })
 
@@ -45,6 +72,9 @@ describe('font helpers', () => {
   it('builds a css2 URL with plus-encoded family names', () => {
     expect(googleCssUrl('Open Sans', 700)).toBe(
       'https://fonts.googleapis.com/css2?family=Open+Sans:wght@700&display=swap',
+    )
+    expect(googleCssUrl('Shippori Mincho B1', 800)).toBe(
+      'https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@800&display=swap',
     )
   })
 
@@ -92,6 +122,15 @@ describe('ensureFont failures', () => {
     )
     await expect(ensureFont('Inter', 700, true)).resolves.toBeUndefined()
     expect(isFontFailed('Inter', 700)).toBe(true)
+  })
+
+  it('does not fetch families that are not hosted on Google Fonts', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    registerDetectedFonts([{ family: 'New Candidate Font', weight: 700 }])
+    await expect(ensureFont('New Candidate Font', 700, true)).resolves.toBeUndefined()
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(isFontFailed('New Candidate Font', 700)).toBe(true)
   })
 })
 

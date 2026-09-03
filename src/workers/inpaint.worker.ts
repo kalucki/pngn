@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-import * as ort from 'onnxruntime-web'
+import * as ort from 'onnxruntime-web/webgpu'
 import type { NeuralInpaintModel } from '../document/types'
 import {
   INPAINT_CACHE_NAME,
@@ -60,18 +60,29 @@ const MODEL_SPECS: Record<NeuralInpaintModel, ModelSpec> = {
   },
 }
 
-let cachedProvider: 'webgpu' | 'wasm' | null = null
+let cachedGpuProvider: 'webgpu' | 'wasm' | null = null
+const gpuRunFailed = new Set<NeuralInpaintModel>()
 
-const detectProvider = async (): Promise<'webgpu' | 'wasm'> => {
-  if (cachedProvider) return cachedProvider
-  cachedProvider = 'wasm'
+const detectGpuProvider = async (): Promise<'webgpu' | 'wasm'> => {
+  if (cachedGpuProvider) return cachedGpuProvider
+  cachedGpuProvider = 'wasm'
   try {
     const gpu = (navigator as unknown as { gpu?: GPU }).gpu
-    if (gpu && (await gpu.requestAdapter())) cachedProvider = 'webgpu'
+    if (gpu && (await gpu.requestAdapter())) cachedGpuProvider = 'webgpu'
   } catch {
-    cachedProvider = 'wasm'
+    cachedGpuProvider = 'wasm'
   }
-  return cachedProvider
+  return cachedGpuProvider
+}
+
+// Default onnxruntime-web is JSEP, which still breaks LaMa's FFC Add. This
+// worker loads the C++ WebGPU EP (PR 25160) and falls back to wasm if that
+// session or run fails. https://github.com/microsoft/onnxruntime/issues/24744
+const preferredProvider = async (
+  model: NeuralInpaintModel,
+): Promise<'webgpu' | 'wasm'> => {
+  if (gpuRunFailed.has(model)) return 'wasm'
+  return detectGpuProvider()
 }
 
 type LoadedSession = {
@@ -82,7 +93,12 @@ type LoadedSession = {
   output: string
 }
 
-const sessions = new Map<NeuralInpaintModel, Promise<LoadedSession>>()
+const sessions = new Map<string, Promise<LoadedSession>>()
+
+const sessionCacheKey = (
+  model: NeuralInpaintModel,
+  provider: 'webgpu' | 'wasm',
+) => `${model}:${provider}`
 
 const probeModel = async (spec: ModelSpec) => {
   const response = await fetch(spec.url, { method: 'HEAD', cache: 'no-store' })
@@ -105,50 +121,77 @@ const openCachedModel = async (spec: ModelSpec) => {
   return URL.createObjectURL(await cached.blob())
 }
 
-const loadSession = (model: NeuralInpaintModel): Promise<LoadedSession> => {
-  const existing = sessions.get(model)
+const configureWasm = () => {
+  ort.env.wasm.numThreads = Math.max(
+    1,
+    Math.min(4, (navigator.hardwareConcurrency ?? 4) - 1),
+  )
+}
+
+const createSession = async (
+  model: NeuralInpaintModel,
+  provider: 'webgpu' | 'wasm',
+): Promise<LoadedSession> => {
+  if (provider === 'wasm') configureWasm()
+  const spec = MODEL_SPECS[model]
+  const cachedUrl = await openCachedModel(spec)
+  if (!cachedUrl) await probeModel(spec)
+  const source = cachedUrl ?? spec.url
+  try {
+    const session = await ort.InferenceSession.create(source, {
+      executionProviders:
+        provider === 'webgpu' ? ['webgpu', 'wasm'] : ['wasm'],
+      graphOptimizationLevel: 'all',
+    })
+    const maskInput =
+      session.inputNames.find((name) => /mask|mark/i.test(name)) ??
+      session.inputNames[1] ??
+      session.inputNames[0]
+    const imageInput =
+      session.inputNames.find((name) => name !== maskInput) ??
+      session.inputNames[0]
+    console.info('[pngn inpaint]', model, 'session', provider)
+    return {
+      session,
+      provider,
+      imageInput,
+      maskInput,
+      output: session.outputNames[0],
+    }
+  } finally {
+    if (cachedUrl) URL.revokeObjectURL(cachedUrl)
+  }
+}
+
+const loadSession = (
+  model: NeuralInpaintModel,
+  provider: 'webgpu' | 'wasm',
+): Promise<LoadedSession> => {
+  const key = sessionCacheKey(model, provider)
+  const existing = sessions.get(key)
   if (existing) return existing
-  const promise = (async () => {
-    const provider = await detectProvider()
-    if (provider === 'wasm') {
-      ort.env.wasm.numThreads = Math.max(
-        1,
-        Math.min(4, (navigator.hardwareConcurrency ?? 4) - 1),
-      )
-    }
-    const spec = MODEL_SPECS[model]
-    const cachedUrl = await openCachedModel(spec)
-    if (!cachedUrl) await probeModel(spec)
-    const source = cachedUrl ?? spec.url
-    try {
-      const session = await ort.InferenceSession.create(source, {
-        executionProviders:
-          provider === 'webgpu' ? ['webgpu', 'wasm'] : ['wasm'],
-        graphOptimizationLevel: 'all',
-      })
-      const maskInput =
-        session.inputNames.find((name) => /mask|mark/i.test(name)) ??
-        session.inputNames[1] ??
-        session.inputNames[0]
-      const imageInput =
-        session.inputNames.find((name) => name !== maskInput) ??
-        session.inputNames[0]
-      return {
-        session,
-        provider,
-        imageInput,
-        maskInput,
-        output: session.outputNames[0],
-      }
-    } finally {
-      if (cachedUrl) URL.revokeObjectURL(cachedUrl)
-    }
-  })()
-  sessions.set(model, promise)
+  const promise = createSession(model, provider)
+  sessions.set(key, promise)
   void promise.catch(() => {
-    if (sessions.get(model) === promise) sessions.delete(model)
+    if (sessions.get(key) === promise) sessions.delete(key)
   })
   return promise
+}
+
+const dropSession = async (
+  model: NeuralInpaintModel,
+  provider: 'webgpu' | 'wasm',
+) => {
+  const key = sessionCacheKey(model, provider)
+  const pending = sessions.get(key)
+  sessions.delete(key)
+  if (!pending) return
+  try {
+    const loaded = await pending
+    await loaded.session.release()
+  } catch {
+    // Session never loaded, or release is unavailable.
+  }
 }
 
 const getContext = (canvas: OffscreenCanvas) => {
@@ -300,31 +343,70 @@ const runFixedFloat = async (
   return new ImageData(pixels, crop.width, crop.height)
 }
 
+const runModel = (
+  loaded: LoadedSession,
+  spec: ModelSpec,
+  crop: ImageData,
+  mask: Uint8Array,
+) =>
+  spec.style === 'pipeline-uint8'
+    ? runPipelineUint8(loaded, crop, mask)
+    : runFixedFloat(loaded, crop, mask, spec.size)
+
+const infer = async (
+  model: NeuralInpaintModel,
+  spec: ModelSpec,
+  crop: ImageData,
+  mask: Uint8Array,
+) => {
+  const preferred = await preferredProvider(model)
+  let loaded: LoadedSession
+  try {
+    loaded = await loadSession(model, preferred)
+  } catch (error) {
+    if (preferred !== 'webgpu') throw error
+    console.warn('[pngn inpaint] WebGPU session failed; using wasm.', error)
+    gpuRunFailed.add(model)
+    loaded = await loadSession(model, 'wasm')
+  }
+
+  try {
+    return {
+      image: await runModel(loaded, spec, crop, mask),
+      provider: loaded.provider,
+    }
+  } catch (error) {
+    if (loaded.provider !== 'webgpu') throw error
+    console.warn('[pngn inpaint] WebGPU run failed; retrying on wasm.', error)
+    gpuRunFailed.add(model)
+    await dropSession(model, 'webgpu')
+    loaded = await loadSession(model, 'wasm')
+    return {
+      image: await runModel(loaded, spec, crop, mask),
+      provider: loaded.provider,
+    }
+  }
+}
+
 const processRequest = async (
   request: InpaintRequest,
 ): Promise<InpaintResponse> => {
   const spec = MODEL_SPECS[request.model]
-  const loaded = await loadSession(request.model)
   const crop = new ImageData(
     new Uint8ClampedArray(request.pixels),
     request.width,
     request.height,
   )
   const mask = new Uint8Array(request.mask)
-
-  const restored =
-    spec.style === 'pipeline-uint8'
-      ? await runPipelineUint8(loaded, crop, mask)
-      : await runFixedFloat(loaded, crop, mask, spec.size)
-
-  const pixels = new Uint8ClampedArray(restored.data)
+  const restored = await infer(request.model, spec, crop, mask)
+  const pixels = new Uint8ClampedArray(restored.image.data)
   return {
     requestId: request.requestId,
     type: 'success',
     pixels: pixels.buffer,
     width: request.width,
     height: request.height,
-    provider: loaded.provider,
+    provider: restored.provider,
   }
 }
 
