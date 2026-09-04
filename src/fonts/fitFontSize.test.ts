@@ -6,14 +6,15 @@ import {
 } from './fitFontSize'
 
 describe('defaultOcrFontSize', () => {
-  it('uses 72% of the OCR box height, with a floor of 8px', () => {
-    expect(defaultOcrFontSize(24)).toBeCloseTo(17.28)
+  it('converts OCR ink height to an em size using the cap-height ratio', () => {
+    expect(defaultOcrFontSize(72)).toBe(100)
+    expect(defaultOcrFontSize(24)).toBeCloseTo(24 / 0.72)
     expect(defaultOcrFontSize(4)).toBe(8)
   })
 })
 
 describe('visualTextSize', () => {
-  it('prefers ink boxes over the em-square advance', () => {
+  it('uses the ink box, not the advance width', () => {
     expect(
       visualTextSize(
         {
@@ -25,10 +26,10 @@ describe('visualTextSize', () => {
         },
         100,
       ),
-    ).toEqual({ width: 80, height: 52 })
+    ).toEqual({ width: 72, height: 52 })
   })
 
-  it('falls back to the OCR height ratio when ink metrics are missing', () => {
+  it('falls back to the cap-height ratio when ink metrics are missing', () => {
     expect(visualTextSize({ width: 40 }, 100)).toEqual({
       width: 40,
       height: 72,
@@ -37,20 +38,17 @@ describe('visualTextSize', () => {
 })
 
 describe('fontSizeFromMetrics', () => {
-  it('scales the sample size so ink height fills a wide OCR box', () => {
-    expect(fontSizeFromMetrics(100, 50, 70, { width: 120, height: 70 })).toBe(100)
+  it('scales the sample so ink height fills the OCR box', () => {
+    expect(fontSizeFromMetrics(100, 72, 72)).toBe(100)
+    expect(fontSizeFromMetrics(100, 74, 73)).toBeCloseTo(98.65, 1)
   })
 
-  it('shrinks when the ink would overflow the box width', () => {
-    expect(fontSizeFromMetrics(100, 200, 72, { width: 72, height: 36 })).toBe(36)
+  it('does not shrink to fit a narrower advance width', () => {
+    expect(fontSizeFromMetrics(100, 74, 74)).toBe(100)
   })
 
   it('clamps tiny and huge results', () => {
-    expect(
-      fontSizeFromMetrics(100, 10_000, 10_000, { width: 1, height: 1 }),
-    ).toBe(4)
-    expect(
-      fontSizeFromMetrics(100, 1, 1, { width: 4000, height: 4000 }),
-    ).toBe(600)
+    expect(fontSizeFromMetrics(100, 10_000, 1)).toBe(4)
+    expect(fontSizeFromMetrics(100, 1, 4000)).toBe(600)
   })
 })

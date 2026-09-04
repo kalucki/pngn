@@ -29,46 +29,38 @@ export type TextSizeMetrics = {
 
 export const visualTextSize = (metrics: TextSizeMetrics, fontSize: number) => {
   const inkWidth =
-    (metrics.actualBoundingBoxLeft ?? 0) + (metrics.actualBoundingBoxRight ?? 0)
+    (metrics.actualBoundingBoxLeft ?? 0) +
+    (metrics.actualBoundingBoxRight ?? 0)
   const inkHeight =
     (metrics.actualBoundingBoxAscent ?? 0) +
     (metrics.actualBoundingBoxDescent ?? 0)
   return {
-    width: Math.max(metrics.width, inkWidth, 1),
+    width: inkWidth > 1 ? inkWidth : Math.max(metrics.width, 1),
     height: inkHeight > 1 ? inkHeight : fontSize * DEFAULT_OCR_FONT_SIZE_RATIO,
   }
 }
 
 export const fontSizeFromMetrics = (
   sampleSize: number,
-  measuredWidth: number,
   measuredHeight: number,
-  bounds: Pick<Bounds, 'width' | 'height'>,
-) => {
-  const sizeFromHeight =
-    sampleSize * (bounds.height / Math.max(1, measuredHeight))
-  const sizeFromWidth =
-    sampleSize * (bounds.width / Math.max(1, measuredWidth))
-  return clamp(
-    Math.min(sizeFromHeight, sizeFromWidth),
+  boxHeight: number,
+) =>
+  clamp(
+    sampleSize * (boxHeight / Math.max(1, measuredHeight)),
     MIN_FONT_SIZE,
     MAX_FONT_SIZE,
   )
-}
 
-const measureLines = (
+const measureInkHeight = (
   context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
   lines: string[],
   fontSize: number,
 ) => {
-  let width = 1
   let height = 0
   for (const line of lines) {
-    const size = visualTextSize(context.measureText(line), fontSize)
-    width = Math.max(width, size.width)
-    height += size.height
+    height += visualTextSize(context.measureText(line), fontSize).height
   }
-  return { width, height: Math.max(height, 1) }
+  return Math.max(height, 1)
 }
 
 const contextForFit = () => {
@@ -111,17 +103,18 @@ export const fitFontSizeToBounds = async ({
   if (!context) return fallback
 
   context.textAlign = 'left'
-  context.textBaseline = 'top'
+  context.textBaseline = 'alphabetic'
   context.font = canvasFont(weight, SAMPLE_SIZE, fontFamily)
-  const sample = measureLines(context, lines, SAMPLE_SIZE)
   let fontSize = fontSizeFromMetrics(
     SAMPLE_SIZE,
-    sample.width,
-    sample.height,
-    bounds,
+    measureInkHeight(context, lines, SAMPLE_SIZE),
+    bounds.height,
   )
 
   context.font = canvasFont(weight, fontSize, fontFamily)
-  const refined = measureLines(context, lines, fontSize)
-  return fontSizeFromMetrics(fontSize, refined.width, refined.height, bounds)
+  return fontSizeFromMetrics(
+    fontSize,
+    measureInkHeight(context, lines, fontSize),
+    bounds.height,
+  )
 }
