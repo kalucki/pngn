@@ -1,0 +1,15 @@
+{
+  "id": "ppocr-v6-tiny",
+  "version": "1",
+  "license": "Apache-2.0",
+  "source": "https://github.com/PT-Perkasa-Pilar-Utama/ppu-paddle-ocr-models",
+  "files": {
+    "detection": "detection.ort",
+    "recognition": "recognition.ort",
+    "dictionary": "dictionary.txt"
+  },
+  "capabilities": {
+    "webgpu": true,
+    "wasm": true
+  }
+}

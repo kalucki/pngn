@@ -1,0 +1,16 @@
+{
+  "id": "migan-512-places2-pipeline-v2",
+  "tier": "free",
+  "license": "MIT",
+  "source": "https://huggingface.co/andraniksargsyan/migan",
+  "upstream": "https://github.com/Picsart-AI-Research/MI-GAN",
+  "files": {
+    "model": "migan_pipeline_v2.onnx"
+  },
+  "io": {
+    "style": "pipeline-uint8",
+    "image": "uint8 NCHW [1,3,H,W] RGB 0-255",
+    "mask": "uint8 [1,1,H,W], 255 = hole",
+    "output": "uint8 NCHW [1,3,H,W] RGB 0-255, full resolution"
+  }
+}
