@@ -1,6 +1,7 @@
 /// <reference lib="webworker" />
 
 import * as ort from 'onnxruntime-web/webgpu'
+import { onnxObjectUrl } from '../cacheOnnx'
 import {
   FONT_MODEL_CACHE_NAME,
   STORIA_FONT_LABELS_URL,
@@ -64,27 +65,6 @@ const preferredProvider = async (): Promise<'webgpu' | 'wasm'> => {
   return detectProvider()
 }
 
-const probeModel = async (url: string) => {
-  const response = await fetch(url, { method: 'HEAD', cache: 'no-store' })
-  const size = Number(response.headers.get('content-length') ?? 0)
-  if (
-    !response.ok ||
-    size < STORIA_FONT_MODEL_MIN_BYTES ||
-    (response.headers.get('content-type') ?? '').includes('html')
-  ) {
-    throw new Error(
-      'Font model is missing. Run pnpm fetch:models before using font matching.',
-    )
-  }
-}
-
-const openCachedModel = async (url: string) => {
-  const cache = await caches.open(FONT_MODEL_CACHE_NAME)
-  const cached = await cache.match(url)
-  if (!cached) return null
-  return URL.createObjectURL(await cached.blob())
-}
-
 const loadLabels = () => {
   labelsPromise ??= fetch(STORIA_FONT_LABELS_URL).then(async (response) => {
     if (!response.ok) {
@@ -109,21 +89,18 @@ const configureWasm = () => {
 
 const createSession = async (provider: 'webgpu' | 'wasm') => {
   if (provider === 'wasm') configureWasm()
-  const url = storiaFontModelRequestUrl()
-  const cachedUrl = await openCachedModel(url)
-  if (!cachedUrl) await probeModel(url)
-  const source = cachedUrl ?? url
+  const source = await onnxObjectUrl(
+    FONT_MODEL_CACHE_NAME,
+    storiaFontModelRequestUrl(),
+    STORIA_FONT_MODEL_MIN_BYTES,
+  )
   try {
     const session = await ort.InferenceSession.create(source, {
       executionProviders:
         provider === 'webgpu' ? ['webgpu', 'wasm'] : ['wasm'],
       graphOptimizationLevel: 'all',
     })
-    console.info(
-      '[pngn font] Storia model ready',
-      provider,
-      cachedUrl ? 'cache' : 'network',
-    )
+    console.info('[pngn font] Storia model ready', provider)
     return {
       session,
       provider,
@@ -131,7 +108,7 @@ const createSession = async (provider: 'webgpu' | 'wasm') => {
       output: session.outputNames[0],
     }
   } finally {
-    if (cachedUrl) URL.revokeObjectURL(cachedUrl)
+    URL.revokeObjectURL(source)
   }
 }
 

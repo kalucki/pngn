@@ -364,6 +364,7 @@ export const App = () => {
           console.info("[pngn font] applying match", {
             text: matched.originalText.slice(0, 32),
             applied: matched.typography.fontFamily,
+            fontSize: matched.typography.fontSize,
             suggested: matched.fontMatch?.family,
             status: matched.fontMatch?.status,
           });

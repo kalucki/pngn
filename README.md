@@ -9,13 +9,12 @@ and no server-side processing.
 
 ```sh
 pnpm install
-pnpm fetch:models   # downloads the neural inpainting weights (once)
 pnpm dev
 ```
 
-`pnpm fetch:models` fetches the MI-GAN and LaMa ONNX weights into
-`public/models/inpaint/`. They are large (LaMa ~200 MB) and are gitignored, so
-run it once after cloning. URLs can be overridden with `MIGAN_URL` / `LAMA_URL`.
+Neural inpainting and font-matching weights load from Hugging Face on first
+use, locally and in production, then sit in Cache Storage. `pnpm fetch:models`
+only refreshes Storia label metadata and the Google Fonts catalog.
 
 Open the local URL shown by Vite, drop a PNG, JPEG, or WebP, drag a rectangle
 around the text to change, then edit and export at the original resolution. OCR
@@ -52,10 +51,10 @@ Choose a fill from the Reconstruction control:
   for large text, photos, or busy textures.
 
 Both neural models run fully client-side via ONNX Runtime Web (WebGPU, WASM
-fallback). Weights are prefetched into Cache Storage and loaded on first use.
-Neural fills use a padded context crop and a feathered composite so there are
-no hard seams. If a neural model fails to load, reconstruction falls back to
-OpenCV Telea.
+fallback). Weights are fetched from Hugging Face, prefetched into Cache
+Storage, and loaded on first use. Neural fills use a padded context crop and a
+feathered composite so there are no hard seams. If a neural model fails to load,
+reconstruction falls back to OpenCV Telea.
 
 Glyph masks use crop-local robust background fitting, perceptual Lab residuals,
 adaptive noise thresholds, color-cluster rejection, morphology, and connected

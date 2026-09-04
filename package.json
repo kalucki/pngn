@@ -7,6 +7,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "predeploy": "pnpm build",
+    "deploy": "gh-pages -d dist",
     "fetch:models": "node scripts/fetch-inpaint-models.mjs",
     "lint": "oxlint src",
     "smoke": "node scripts/smoke.mjs",

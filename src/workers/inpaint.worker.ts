@@ -2,6 +2,7 @@
 
 import * as ort from 'onnxruntime-web/webgpu'
 import type { NeuralInpaintModel } from '../document/types'
+import { onnxObjectUrl } from '../cacheOnnx'
 import {
   INPAINT_CACHE_NAME,
   INPAINT_MODEL_MIN_BYTES,
@@ -100,27 +101,6 @@ const sessionCacheKey = (
   provider: 'webgpu' | 'wasm',
 ) => `${model}:${provider}`
 
-const probeModel = async (spec: ModelSpec) => {
-  const response = await fetch(spec.url, { method: 'HEAD', cache: 'no-store' })
-  const size = Number(response.headers.get('content-length') ?? 0)
-  if (
-    !response.ok ||
-    size < spec.minBytes ||
-    (response.headers.get('content-type') ?? '').includes('html')
-  ) {
-    throw new Error(
-      `Failed to load ${spec.url}. Run pnpm fetch:models before using neural reconstruction.`,
-    )
-  }
-}
-
-const openCachedModel = async (spec: ModelSpec) => {
-  const cache = await caches.open(INPAINT_CACHE_NAME)
-  const cached = await cache.match(spec.url)
-  if (!cached) return null
-  return URL.createObjectURL(await cached.blob())
-}
-
 const configureWasm = () => {
   ort.env.wasm.numThreads = Math.max(
     1,
@@ -134,9 +114,7 @@ const createSession = async (
 ): Promise<LoadedSession> => {
   if (provider === 'wasm') configureWasm()
   const spec = MODEL_SPECS[model]
-  const cachedUrl = await openCachedModel(spec)
-  if (!cachedUrl) await probeModel(spec)
-  const source = cachedUrl ?? spec.url
+  const source = await onnxObjectUrl(INPAINT_CACHE_NAME, spec.url, spec.minBytes)
   try {
     const session = await ort.InferenceSession.create(source, {
       executionProviders:
@@ -159,7 +137,7 @@ const createSession = async (
       output: session.outputNames[0],
     }
   } finally {
-    if (cachedUrl) URL.revokeObjectURL(cachedUrl)
+    URL.revokeObjectURL(source)
   }
 }
 

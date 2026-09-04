@@ -1,6 +1,8 @@
 import type { TextLayer } from '../document/types'
 import { fontByFamily, nearestWeight, registerDetectedFonts } from '../editor/fonts'
+import { fitFontSizeToBounds } from './fitFontSize'
 import { identifyFont } from './fontIdClient'
+import { defaultOcrFontSize } from './ocrDefaults'
 import {
   autoApplyDecision,
   DEFAULT_OCR_FONT,
@@ -40,9 +42,16 @@ const skipReason = (layer: TextLayer) => {
   return null
 }
 
-export const isDefaultOcrTypography = (layer: TextLayer) =>
+export const isDefaultOcrFont = (layer: TextLayer) =>
   layer.typography.fontFamily === DEFAULT_OCR_FONT &&
   layer.typography.fontWeight === DEFAULT_OCR_WEIGHT
+
+export const isDefaultOcrSize = (layer: TextLayer) =>
+  Math.abs(layer.typography.fontSize - defaultOcrFontSize(layer.bounds.height)) <
+  0.05
+
+export const isDefaultOcrTypography = (layer: TextLayer) =>
+  isDefaultOcrFont(layer) && isDefaultOcrSize(layer)
 
 export const isViableFontMatchLayer = (layer: TextLayer) => skipReason(layer) === null
 
@@ -63,11 +72,20 @@ export const mergeMatchedFontLayer = (current: TextLayer, matched: TextLayer) =>
   if (currentRequest && matchedRequest && currentRequest !== matchedRequest) {
     return current
   }
-  const keepUserTypography =
-    !isDefaultOcrTypography(current) && current.fontMatch?.status === 'pending'
-  return keepUserTypography
-    ? { ...current, fontMatch: matched.fontMatch }
-    : matched
+  const pending = current.fontMatch?.status === 'pending'
+  if (pending && !isDefaultOcrFont(current)) {
+    return { ...current, fontMatch: matched.fontMatch }
+  }
+  if (pending && !isDefaultOcrSize(current)) {
+    return {
+      ...matched,
+      typography: {
+        ...matched.typography,
+        fontSize: current.typography.fontSize,
+      },
+    }
+  }
+  return matched
 }
 
 const cropLayer = (bitmap: ImageBitmap, layer: TextLayer) => {
@@ -112,19 +130,39 @@ const applyBestCandidate = (layer: TextLayer, family: string, weight: number) =>
   }
 }
 
+const withFittedSize = async (layer: TextLayer) => {
+  const fontSize = await fitFontSizeToBounds({
+    text: layer.originalText || layer.text,
+    fontFamily: layer.typography.fontFamily,
+    fontWeight: layer.typography.fontWeight,
+    bounds: layer.bounds,
+  })
+  if (Math.abs(fontSize - layer.typography.fontSize) < 0.05) return layer
+  console.info(
+    LOG,
+    `fit size "${layer.originalText.slice(0, 48)}" ${layer.typography.fontSize.toFixed(1)} → ${fontSize.toFixed(1)}`,
+  )
+  return {
+    ...layer,
+    typography: { ...layer.typography, fontSize },
+  }
+}
+
 const matchLayer = async (bitmap: ImageBitmap, layer: TextLayer) => {
   const label = `"${layer.originalText.slice(0, 48)}"`
   const skipped = skipReason(layer)
   if (skipped) {
     console.info(LOG, `skip ${label}: ${skipped} — keeping ${layer.typography.fontFamily}`)
-    return attachMatch(layer, {
-      family: layer.typography.fontFamily,
-      weight: layer.typography.fontWeight,
-      italic: false,
-      score: 0,
-      status: 'skipped',
-      similar: [],
-    })
+    return withFittedSize(
+      attachMatch(layer, {
+        family: layer.typography.fontFamily,
+        weight: layer.typography.fontWeight,
+        italic: false,
+        score: 0,
+        status: 'skipped',
+        similar: [],
+      }),
+    )
   }
 
   try {
@@ -163,28 +201,30 @@ const matchLayer = async (bitmap: ImageBitmap, layer: TextLayer) => {
       similar,
     })
     const decision = autoApplyDecision(ranked)
-    if (isDefaultOcrTypography(layer) && decision.apply) {
+    if (isDefaultOcrFont(layer) && decision.apply) {
       console.info(
         LOG,
         `auto-apply ${label}: ${formatCandidate(best)} — ${decision.reason}`,
       )
-      return applyBestCandidate(matched, best.family, best.weight)
+      return withFittedSize(applyBestCandidate(matched, best.family, best.weight))
     }
     console.info(
       LOG,
       `keep ${layer.typography.fontFamily} for ${label}; suggested ${formatCandidate(best)} — ${decision.reason}`,
     )
-    return matched
+    return withFittedSize(matched)
   } catch (error) {
     console.warn(LOG, `failed ${label}:`, error)
-    return attachMatch(layer, {
-      family: layer.typography.fontFamily,
-      weight: layer.typography.fontWeight,
-      italic: false,
-      score: 0,
-      status: 'error',
-      similar: [],
-    })
+    return withFittedSize(
+      attachMatch(layer, {
+        family: layer.typography.fontFamily,
+        weight: layer.typography.fontWeight,
+        italic: false,
+        score: 0,
+        status: 'error',
+        similar: [],
+      }),
+    )
   }
 }
 

@@ -1,4 +1,4 @@
-import { createReadStream, existsSync, statSync, writeFileSync } from 'node:fs'
+import { createReadStream, existsSync, globSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -99,14 +99,14 @@ const serveModelFiles = (): Plugin => {
         if (!info?.isFile() || info.size < 1024) {
           res.statusCode = 404
           res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-          res.end('Missing model file. Run pnpm fetch:models.')
+          res.end('Missing local model file. The app loads ONNX weights from Hugging Face.')
           return
         }
         sendModelFile(req, res, file, info.size)
       } catch {
         res.statusCode = 404
         res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-        res.end('Missing model file. Run pnpm fetch:models.')
+          res.end('Missing local model file. The app loads ONNX weights from Hugging Face.')
       }
     })
   }
@@ -168,12 +168,28 @@ const rootHrefFallback = (): Plugin => ({
   },
 })
 
+const omitPublicOnnx = (): Plugin => ({
+  name: 'omit-public-onnx',
+  apply: 'build',
+  closeBundle() {
+    for (const file of globSync('**/*.onnx', { cwd: distDir })) {
+      rmSync(join(distDir, file))
+    }
+  },
+})
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const siteOrigin = (env.VITE_SITE_ORIGIN ?? '').replace(/\/+$/, '')
 
   return {
-    plugins: [rootHrefFallback(), react(), serveModelFiles(), seoFiles(siteOrigin)],
+    plugins: [
+      rootHrefFallback(),
+      react(),
+      serveModelFiles(),
+      seoFiles(siteOrigin),
+      omitPublicOnnx(),
+    ],
     worker: {
       format: 'es',
     },

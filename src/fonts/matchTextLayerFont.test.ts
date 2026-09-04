@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { TextLayer } from '../document/types'
+import { defaultOcrFontSize } from './fitFontSize'
 import {
   cropScaleFor,
+  isDefaultOcrSize,
   isDefaultOcrTypography,
   isViableFontMatchLayer,
   markPendingFontMatches,
@@ -17,7 +19,7 @@ const layer = (overrides: Partial<TextLayer> = {}): TextLayer => ({
   rotation: 0,
   typography: {
     fontFamily: 'Arial',
-    fontSize: 18,
+    fontSize: defaultOcrFontSize(24),
     fontWeight: 700,
     color: '#111111',
     strokeColor: '#000000',
@@ -89,9 +91,15 @@ describe('font match layer filters', () => {
     expect(pending?.fontMatch?.status).toBe('pending')
     expect(pending?.fontMatch?.requestId).toBeTruthy()
     expect(isDefaultOcrTypography(pending!)).toBe(true)
+    expect(isDefaultOcrSize(pending!)).toBe(true)
     expect(
       isDefaultOcrTypography(
         layer({ typography: { ...layer().typography, fontFamily: 'Georgia' } }),
+      ),
+    ).toBe(false)
+    expect(
+      isDefaultOcrSize(
+        layer({ typography: { ...layer().typography, fontSize: 40 } }),
       ),
     ).toBe(false)
   })
@@ -145,6 +153,34 @@ describe('font match layer filters', () => {
     expect(mergeMatchedFontLayer(edited, matched)).toEqual({
       ...edited,
       fontMatch: matched.fontMatch,
+    })
+  })
+
+  it('keeps a size the user picked while still applying the matched font', () => {
+    const [pending] = markPendingFontMatches([layer()])
+    const edited = {
+      ...pending!,
+      typography: { ...pending!.typography, fontSize: 40 },
+    }
+    const matched = {
+      ...pending!,
+      typography: {
+        ...pending!.typography,
+        fontFamily: 'Roboto',
+        fontSize: 22,
+      },
+      fontMatch: {
+        ...pending!.fontMatch!,
+        family: 'Roboto',
+        status: 'ready' as const,
+      },
+    }
+    expect(mergeMatchedFontLayer(edited, matched)).toEqual({
+      ...matched,
+      typography: {
+        ...matched.typography,
+        fontSize: 40,
+      },
     })
   })
 })

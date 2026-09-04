@@ -7,6 +7,7 @@ import type {
 } from '../document/types'
 import { inpaint, type InpaintMethod } from './inpaint'
 import { neuralInpaint } from './inpaintClient'
+import { defaultOcrFontSize } from '../fonts/ocrDefaults'
 import {
   analyticalFillDisagreesWithRing,
   predictBackground,
@@ -326,7 +327,7 @@ const createLayer = (
     rotation: 0,
     typography: {
       fontFamily: 'Arial',
-      fontSize: Math.max(8, bounds.height * 0.72),
+      fontSize: defaultOcrFontSize(bounds.height),
       fontWeight: 700,
       color: segmentation.textColor,
       strokeColor: '#000000',

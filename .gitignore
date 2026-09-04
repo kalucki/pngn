@@ -23,6 +23,6 @@ dist-ssr
 *.sln
 *.sw?
 
-# Neural model weights (large; fetch with `pnpm fetch:models`)
+# Neural model weights (optional local copies; the app loads them from Hugging Face)
 public/models/inpaint/**/*.onnx
 public/models/font/**/*.onnx
