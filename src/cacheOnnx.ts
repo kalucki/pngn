@@ -1,5 +1,24 @@
 const inflight = new Map<string, Promise<void>>()
 
+const cacheStorage = (): CacheStorage | undefined => {
+  try {
+    return (globalThis as { caches?: CacheStorage }).caches
+  } catch {
+    return undefined
+  }
+}
+
+const openCache = async (cacheName: string): Promise<Cache | undefined> => {
+  const storage = cacheStorage()
+  if (!storage) return undefined
+  try {
+    return await storage.open(cacheName)
+  } catch {
+    // Private mode and some dedicated workers expose the API but reject on open.
+    return undefined
+  }
+}
+
 const discardBody = async (body: ReadableStream<Uint8Array>) => {
   const reader = body.getReader()
   let received = 0
@@ -11,19 +30,13 @@ const discardBody = async (body: ReadableStream<Uint8Array>) => {
   return received
 }
 
-const downloadIntoCache = async (
-  cacheName: string,
-  url: string,
-  minBytes: number,
-) => {
-  const cache = await caches.open(cacheName)
-  if (await cache.match(url)) return
-
+const fetchModelResponse = async (url: string, minBytes: number) => {
   const response = await fetch(url, { mode: 'cors', credentials: 'omit' })
   const total = Number(response.headers.get('content-length') ?? 0)
+  const { body } = response
   if (
     !response.ok ||
-    !response.body ||
+    !body ||
     (total > 0 && total < minBytes) ||
     (response.headers.get('content-type') ?? '').includes('html')
   ) {
@@ -31,25 +44,56 @@ const downloadIntoCache = async (
       `Failed to download model from Hugging Face (${response.status}): ${url}`,
     )
   }
+  return { response, body }
+}
 
-  const [progressSide, cacheSide] = response.body.tee()
-  const [received] = await Promise.all([
-    discardBody(progressSide),
-    cache.put(
-      url,
-      new Response(cacheSide, {
-        status: response.status,
-        statusText: response.statusText,
-        headers: response.headers,
-      }),
-    ),
-  ])
+const clonedResponse = (body: ReadableStream<Uint8Array>, source: Response) =>
+  new Response(body, {
+    status: source.status,
+    statusText: source.statusText,
+    headers: source.headers,
+  })
+
+const downloadIntoCache = async (
+  cacheName: string,
+  url: string,
+  minBytes: number,
+) => {
+  const cache = await openCache(cacheName)
+  if (!cache) return
+  if (await cache.match(url)) return
+
+  const { response, body } = await fetchModelResponse(url, minBytes)
+  const [progressSide, cacheSide] = body.tee()
+  let received: number
+  try {
+    const progress = await Promise.all([
+      discardBody(progressSide),
+      cache.put(url, clonedResponse(cacheSide, response)),
+    ])
+    received = progress[0]
+  } catch {
+    // Quota and private-mode puts fail after open() succeeds. The worker can
+    // still load from the network.
+    return
+  }
   if (received < minBytes) {
     await cache.delete(url)
     throw new Error(
       `Hugging Face model was too small (${received} bytes): ${url}`,
     )
   }
+}
+
+const blobFromNetwork = async (url: string, minBytes: number) => {
+  const { response } = await fetchModelResponse(url, minBytes)
+  const blob = await response.blob()
+  if (blob.size < minBytes) {
+    throw new Error(
+      `Hugging Face model was too small (${blob.size} bytes): ${url}`,
+    )
+  }
+  return blob
 }
 
 export const ensureOnnxCached = (
@@ -62,9 +106,13 @@ export const ensureOnnxCached = (
   if (existing) return existing
   const promise = downloadIntoCache(cacheName, url, minBytes)
   inflight.set(key, promise)
-  void promise.finally(() => {
-    if (inflight.get(key) === promise) inflight.delete(key)
-  })
+  // Catch on this branch so a rejected download is not reported twice: once
+  // from the caller and again from the unhandled `finally` promise.
+  void promise
+    .catch(() => {})
+    .finally(() => {
+      if (inflight.get(key) === promise) inflight.delete(key)
+    })
   return promise
 }
 
@@ -74,9 +122,7 @@ export const onnxObjectUrl = async (
   minBytes: number,
 ) => {
   await ensureOnnxCached(cacheName, url, minBytes)
-  const cached = await (await caches.open(cacheName)).match(url)
-  if (!cached) {
-    throw new Error(`Model was not cached after download: ${url}`)
-  }
-  return URL.createObjectURL(await cached.blob())
+  const cached = await (await openCache(cacheName))?.match(url)
+  if (cached) return URL.createObjectURL(await cached.blob())
+  return URL.createObjectURL(await blobFromNetwork(url, minBytes))
 }
