@@ -1,4 +1,5 @@
 import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { revertLayerRemoval } from '../editor/revertLayerRemoval'
 import { neuralInpaint } from './inpaintClient'
 import { reconstructTextRegions } from './reconstruction'
 
@@ -146,6 +147,136 @@ describe('reconstructTextRegions', () => {
     expect(result.clean.data[center]).toBeGreaterThan(220)
     expect(result.maskedPixels).toBeGreaterThan(0)
     expect(result.layers[0].processing.reconstructionMethod).toBe('flat')
+  })
+
+  it('fills disconnected leftover ink inside a flat OCR box', async () => {
+    const width = 80
+    const height = 40
+    const pixels = new Uint8ClampedArray(width * height * 4)
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      pixels[offset] = 250
+      pixels[offset + 1] = 250
+      pixels[offset + 2] = 250
+      pixels[offset + 3] = 255
+    }
+    for (let y = 12; y < 24; y += 1) {
+      for (let x = 16; x < 26; x += 1) {
+        const offset = (y * width + x) * 4
+        pixels[offset] = 18
+        pixels[offset + 1] = 18
+        pixels[offset + 2] = 18
+      }
+      for (let x = 36; x < 42; x += 1) {
+        const offset = (y * width + x) * 4
+        pixels[offset] = 232
+        pixels[offset + 1] = 232
+        pixels[offset + 2] = 232
+      }
+    }
+    const original = new ImageData(pixels, width, height)
+    const result = await reconstructTextRegions(
+      original,
+      [
+        {
+          text: 'AB',
+          confidence: 0.96,
+          bounds: { x: 14, y: 10, width: 30, height: 16 },
+        },
+      ],
+      { method: 'auto', maskThreshold: 34, maskDilation: 0 },
+    )
+
+    const leftover = (16 * original.width + 38) * 4
+    const farBackground = (4 * original.width + 4) * 4
+    expect(result.clean.data[leftover]).toBeGreaterThan(240)
+    expect(result.clean.data[farBackground]).toBe(250)
+    expect(result.layers[0].processing.reconstructionMethod).toBe('flat')
+  })
+
+  it('fills both ends of a glued headline on a beige wash', async () => {
+    const width = 220
+    const height = 56
+    const pixels = new Uint8ClampedArray(width * height * 4)
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const target = (y * width + x) * 4
+        pixels[target] = 210 + Math.round((x / width) * 28)
+        pixels[target + 1] = 196 + Math.round((x / width) * 22)
+        pixels[target + 2] = 172 + Math.round((x / width) * 18)
+        pixels[target + 3] = 255
+      }
+    }
+    for (let y = 18; y < 38; y += 1) {
+      for (let x = 22; x < 58; x += 1) {
+        const offset = (y * width + x) * 4
+        pixels[offset] = 18
+        pixels[offset + 1] = 18
+        pixels[offset + 2] = 18
+      }
+      for (let x = 148; x < 186; x += 1) {
+        const offset = (y * width + x) * 4
+        pixels[offset] = 18
+        pixels[offset + 1] = 18
+        pixels[offset + 2] = 18
+      }
+    }
+    const original = new ImageData(pixels, width, height)
+    const result = await reconstructTextRegions(
+      original,
+      [
+        {
+          text: 'GOTOWIECINWESTYCYJNY',
+          confidence: 0.93,
+          bounds: { x: 18, y: 16, width: 172, height: 24 },
+        },
+      ],
+      { method: 'auto', maskThreshold: 34, maskDilation: 0 },
+    )
+
+    const leftLetter = (26 * original.width + 30) * 4
+    const rightLetter = (26 * original.width + 168) * 4
+    const farBackground = (6 * original.width + 6) * 4
+    expect(result.clean.data[leftLetter]).toBeGreaterThan(180)
+    expect(result.clean.data[rightLetter]).toBeGreaterThan(180)
+    expect(result.clean.data[farBackground]).toBeGreaterThan(200)
+    expect(['flat', 'gradient']).toContain(
+      result.layers[0].processing.reconstructionMethod,
+    )
+  })
+
+  it('stores a per-layer mask that can restore the original pixels', async () => {
+    const original = createFixture()
+    const result = await reconstructTextRegions(
+      original,
+      [
+        {
+          text: 'TEST',
+          confidence: 0.98,
+          bounds: { x: 10, y: 7, width: 20, height: 10 },
+        },
+      ],
+      { method: 'auto', maskThreshold: 30, maskDilation: 1 },
+    )
+    const layer = result.layers[0]
+    expect(layer.removal.mask.length).toBe(
+      layer.removal.bounds.width * layer.removal.bounds.height,
+    )
+    expect(layer.removal.mask.some((value) => value !== 0)).toBe(true)
+
+    const clean = new ImageData(
+      new Uint8ClampedArray(result.clean.data),
+      result.clean.width,
+      result.clean.height,
+    )
+    const mask = new ImageData(
+      new Uint8ClampedArray(result.mask.data),
+      result.mask.width,
+      result.mask.height,
+    )
+    revertLayerRemoval(original, clean, mask, layer.removal, [])
+
+    expect(Array.from(clean.data)).toEqual(Array.from(original.data))
+    expect(mask.data.every((value) => value === 0)).toBe(true)
   })
 
   it('removes large black letters even when colorful artwork sits nearby', async () => {

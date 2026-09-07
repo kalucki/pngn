@@ -16,7 +16,7 @@ import type {
   ProcessingResponse,
 } from './messages'
 
-const MODEL_BASE = '/models/ocr/ppocr-v6-tiny-v1'
+const MODEL_BASE = '/models/ocr/ppocr-v6-medium-v1'
 
 let provider: 'webgpu' | 'wasm' = 'wasm'
 let ready: Promise<PaddleOcrService> | null = null
@@ -197,7 +197,7 @@ const processImage = async (request: ProcessingRequest) => {
     maskImage,
     textLayers: reconstruction.layers,
     diagnostics: {
-      model: 'PP-OCRv6 tiny (ORT)',
+      model: 'PP-OCRv6 medium (ORT)',
       provider,
       inpaintModel: reconstruction.inpaintModel,
       inpaintProvider: reconstruction.inpaintProvider,

@@ -318,6 +318,10 @@ const createLayer = (
     originalText: detection.text,
     text: detection.text,
     bounds: { ...bounds },
+    removal: {
+      bounds: { ...segmentation.bounds },
+      mask: new Uint8Array(segmentation.removalMask),
+    },
     polygon: [
       { x: bounds.x, y: bounds.y },
       { x: bounds.x + bounds.width, y: bounds.y },

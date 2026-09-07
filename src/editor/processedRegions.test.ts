@@ -42,6 +42,10 @@ const layer = (overrides: Partial<TextLayer> & Pick<TextLayer, 'id'>): TextLayer
     reconstructionMethod: 'migan',
     backgroundType: 'flat',
   },
+  removal: {
+    bounds: { x: 10, y: 10, width: 40, height: 16 },
+    mask: new Uint8Array(40 * 16),
+  },
   ...overrides,
 })
 
@@ -89,6 +93,29 @@ describe('adoptRegionLayers', () => {
     expect(adopted[0]?.typography.strokeWidth).toBe(3)
     expect(adopted[0]?.rotation).toBe(12)
     expect(adopted[0]?.processing.reconstructionMethod).toBe('migan')
+  })
+
+  it('takes the new removal mask when a region is reprocessed', () => {
+    const previous = [
+      layer({
+        id: 'keep-me',
+        removal: {
+          bounds: { x: 0, y: 0, width: 2, height: 1 },
+          mask: new Uint8Array([255, 0]),
+        },
+      }),
+    ]
+    const nextRemoval = {
+      bounds: { x: 4, y: 5, width: 2, height: 1 },
+      mask: new Uint8Array([0, 255]),
+    }
+    const adopted = adoptRegionLayers(
+      previous,
+      [layer({ id: 'fresh', removal: nextRemoval })],
+      'region-1',
+    )
+    expect(adopted[0]?.removal.bounds).toEqual(nextRemoval.bounds)
+    expect(Array.from(adopted[0]?.removal.mask ?? [])).toEqual([0, 255])
   })
 
   it('assigns stable ids for newly detected lines', () => {

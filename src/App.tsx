@@ -34,6 +34,10 @@ import {
   staleLayerIds,
   type ProcessedRegion,
 } from "./editor/processedRegions";
+import {
+  imageDataFromFile,
+  patchProcessedImage,
+} from "./editor/revertLayerRemoval";
 import { RegionSelector } from "./editor/RegionSelector";
 import { TextToolbar } from "./editor/TextToolbar";
 import { FlowSteps } from "./layout/FlowSteps";
@@ -83,7 +87,7 @@ type ReconstructionChoice = "auto" | NeuralInpaintModel;
 const initialOptions: ProcessingOptions = {
   method: "auto",
   maskThreshold: 34,
-  maskDilation: 4,
+  maskDilation: 8,
 };
 
 const reconstructionMethods: {
@@ -225,6 +229,7 @@ export const App = () => {
   const urlsRef = useRef(urls);
   const isAddingRegionRef = useRef(isAddingRegion);
   const isProcessingRef = useRef(isProcessing);
+  const removeLayerChainRef = useRef(Promise.resolve());
   const requestApplyToLayerRef = useRef<(layerId: string) => void>(() => {});
 
   const selectedLayer = useMemo(
@@ -607,26 +612,114 @@ export const App = () => {
     );
   };
 
-  const removeLayer = (id: string) => {
+  const revertRemovedLayer = async (id: string) => {
+    const generation = processingGenerationRef.current;
+    const sourceFile = file;
     const currentLayers = layersRef.current;
     const index = currentLayers.findIndex((layer) => layer.id === id);
     if (index < 0) return;
+    const removedLayer = currentLayers[index];
     const nextLayers = currentLayers.filter((layer) => layer.id !== id);
-    setLayers(nextLayers);
-    setRegions((current) =>
-      current.map((region) => ({
-        ...region,
-        layerIds: region.layerIds.filter((layerId) => layerId !== id),
-      })),
-    );
-    setResult((current) =>
-      current ? { ...current, textLayers: nextLayers } : current,
-    );
-    if (selectedLayerIdRef.current === id) {
-      setSelectedLayerId(
-        (nextLayers[index] ?? nextLayers[index - 1])?.id ?? null,
-      );
+    const region = findRegionByLayerId(regionsRef.current, id);
+    const remainingRegionLayers = region
+      ? nextLayers.filter((layer) => region.layerIds.includes(layer.id))
+      : [];
+    let nextRegions = regionsRef.current.map((entry) => ({
+      ...entry,
+      layerIds: entry.layerIds.filter((layerId) => layerId !== id),
+    }));
+
+    if (region && remainingRegionLayers.length === 0) {
+      nextRegions = nextRegions.filter((entry) => entry.id !== region.id);
     }
+
+    const previousSelected = selectedLayerIdRef.current;
+    setLayers(nextLayers);
+    if (previousSelected === id) {
+      const nextSelected =
+        (nextLayers[index] ?? nextLayers[index - 1])?.id ?? null;
+      selectedLayerIdRef.current = nextSelected;
+      setSelectedLayerId(nextSelected);
+    }
+
+    try {
+      if (region && remainingRegionLayers.length > 0 && sourceFile) {
+        const original = await imageDataFromFile(sourceFile);
+        if (generation !== processingGenerationRef.current) return;
+        const patched = await patchProcessedImage(
+          original,
+          region.processed,
+          removedLayer.removal,
+          remainingRegionLayers.map((layer) => layer.removal),
+        );
+        if (generation !== processingGenerationRef.current) return;
+        nextRegions = nextRegions.map((entry) =>
+          entry.id === region.id
+            ? {
+                ...entry,
+                layerIds: remainingRegionLayers.map((layer) => layer.id),
+                processed: { ...patched, textLayers: remainingRegionLayers },
+              }
+            : entry,
+        );
+      }
+
+      const nextUrls = await composeProcessedRegions(nextRegions);
+      if (generation !== processingGenerationRef.current) {
+        if (nextUrls) {
+          URL.revokeObjectURL(nextUrls.clean);
+          URL.revokeObjectURL(nextUrls.mask);
+        }
+        return;
+      }
+
+      layersRef.current = nextLayers;
+      regionsRef.current = nextRegions;
+      urlsRef.current = nextUrls;
+      setRegions(nextRegions);
+      setUrls(nextUrls);
+      if (nextRegions.length === 0) {
+        setResult(null);
+      } else {
+        setResult((current) =>
+          current
+            ? {
+                ...current,
+                textLayers: nextLayers,
+                diagnostics: {
+                  ...current.diagnostics,
+                  maskedPixels: nextRegions.reduce(
+                    (sum, entry) =>
+                      sum + entry.processed.diagnostics.maskedPixels,
+                    0,
+                  ),
+                },
+              }
+            : current,
+        );
+      }
+    } catch (error) {
+      if (generation === processingGenerationRef.current) {
+        setLayers(currentLayers);
+        selectedLayerIdRef.current = previousSelected;
+        setSelectedLayerId(previousSelected);
+      }
+      throw error;
+    }
+  };
+
+  const removeLayer = (id: string) => {
+    removeLayerChainRef.current = removeLayerChainRef.current.then(
+      () => revertRemovedLayer(id),
+      () => revertRemovedLayer(id),
+    );
+    void removeLayerChainRef.current.catch((error: unknown) => {
+      setError(
+        error instanceof Error
+          ? error.message
+          : "The text layer could not be removed.",
+      );
+    });
   };
 
   const handleExport = () => {
@@ -802,7 +895,7 @@ export const App = () => {
         <Slider
           className="control-input"
           min={0}
-          max={8}
+          max={16}
           thumbLabel={t("app.maskExpansion")}
           label={(value) => `${value}px`}
           value={options.maskDilation}

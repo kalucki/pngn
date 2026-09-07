@@ -30,6 +30,11 @@ export type DetectedText = {
   bounds: Bounds
 }
 
+export type LayerRemoval = {
+  bounds: Bounds
+  mask: Uint8Array
+}
+
 export type TextLayer = {
   id: string
   originalText: string
@@ -37,6 +42,7 @@ export type TextLayer = {
   bounds: Bounds
   polygon: Point[]
   rotation: number
+  removal: LayerRemoval
   typography: {
     fontFamily: string
     fontSize: number

@@ -10,6 +10,7 @@
     "predeploy": "pnpm build",
     "deploy": "gh-pages -d dist",
     "fetch:models": "node scripts/fetch-inpaint-models.mjs",
+    "fetch:ocr": "node scripts/fetch-ocr-models.mjs",
     "lint": "oxlint src",
     "smoke": "node scripts/smoke.mjs",
     "test": "vitest run",

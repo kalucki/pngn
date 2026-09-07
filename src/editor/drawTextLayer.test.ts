@@ -28,6 +28,10 @@ const layer = (strokeWidth: number): TextLayer => ({
     reconstructionMethod: 'flat',
     backgroundType: 'flat',
   },
+  removal: {
+    bounds: { x: 0, y: 0, width: 40, height: 16 },
+    mask: new Uint8Array(40 * 16),
+  },
 })
 
 describe('defaultStrokeWidth', () => {

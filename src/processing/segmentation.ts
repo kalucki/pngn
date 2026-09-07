@@ -166,6 +166,17 @@ const outsideRect = (x: number, y: number, bounds: Bounds) =>
   y < bounds.y ||
   y > bounds.y + bounds.height;
 
+const insideExpandedRect = (
+  x: number,
+  y: number,
+  bounds: Bounds,
+  pad: number,
+) =>
+  x >= bounds.x - pad &&
+  x <= bounds.x + bounds.width + pad &&
+  y >= bounds.y - pad &&
+  y <= bounds.y + bounds.height + pad;
+
 const chebyshevToRect = (x: number, y: number, bounds: Bounds) => {
   const dx =
     x < bounds.x
@@ -184,6 +195,14 @@ const chebyshevToRect = (x: number, y: number, bounds: Bounds) => {
 
 const localRingBand = (textHeight: number) =>
   Math.max(4, Math.min(16, Math.round(textHeight * 0.1)));
+
+// Same gates Auto uses to pick a flat or gradient fill. A slow color wash
+// across a wide headline is not a photo, so the OCR box itself should be the
+// hole instead of a residual mask that dies out on one side.
+const isGentleField = (model: BackgroundModel) =>
+  model.localVariance < 105 ||
+  (model.variance < 105 && model.fitError < 95) ||
+  (model.fitError < 185 && model.edgeDensity < 0.09);
 
 const fitBackgroundModel = (
   image: ImageData,
@@ -572,6 +591,7 @@ export const segmentGlyphs = (
     }
   }
 
+  const fillDetectionBox = isGentleField(model);
   const noise90 = percentile(ringResiduals, 0.9);
   const noise75 = percentile(ringResiduals, 0.75);
   const sensitivityFloor = options.maskThreshold * 0.42;
@@ -587,13 +607,12 @@ export const segmentGlyphs = (
     for (let x = 0; x < bounds.width; x += 1) {
       const globalX = bounds.x + x;
       const globalY = bounds.y + y;
-      const insideCandidate =
-        globalX >= detection.bounds.x - candidateMargin &&
-        globalX <=
-          detection.bounds.x + detection.bounds.width + candidateMargin &&
-        globalY >= detection.bounds.y - candidateMargin &&
-        globalY <=
-          detection.bounds.y + detection.bounds.height + candidateMargin;
+      const insideCandidate = insideExpandedRect(
+        globalX,
+        globalY,
+        detection.bounds,
+        candidateMargin,
+      );
       const local = y * bounds.width + x;
       if (insideCandidate && residuals[local] >= coreThreshold) {
         core[local] = 255;
@@ -608,13 +627,12 @@ export const segmentGlyphs = (
       for (let x = 0; x < bounds.width; x += 1) {
         const globalX = bounds.x + x;
         const globalY = bounds.y + y;
-        const insideCandidate =
-          globalX >= detection.bounds.x - candidateMargin &&
-          globalX <=
-            detection.bounds.x + detection.bounds.width + candidateMargin &&
-          globalY >= detection.bounds.y - candidateMargin &&
-          globalY <=
-            detection.bounds.y + detection.bounds.height + candidateMargin;
+        const insideCandidate = insideExpandedRect(
+          globalX,
+          globalY,
+          detection.bounds,
+          candidateMargin,
+        );
         const local = y * bounds.width + x;
         if (!insideCandidate || core[local]) continue;
         const source = offset(globalX, globalY, image.width);
@@ -633,7 +651,9 @@ export const segmentGlyphs = (
     }
   }
 
-  core = selectCoreColorClusters(image, bounds, core, residuals);
+  if (!fillDetectionBox) {
+    core = selectCoreColorClusters(image, bounds, core, residuals);
+  }
   core = morph(
     morph(core, bounds.width, bounds.height, 1, "dilate"),
     bounds.width,
@@ -660,6 +680,38 @@ export const segmentGlyphs = (
     Math.max(options.maskDilation, automaticExpansion),
     "dilate",
   );
+  if (fillDetectionBox) {
+    const boxPad = Math.max(2, options.maskDilation, automaticExpansion);
+    const leftoverFloor = Math.max(3, noise75);
+    for (let y = 0; y < bounds.height; y += 1) {
+      for (let x = 0; x < bounds.width; x += 1) {
+        const globalX = bounds.x + x;
+        const globalY = bounds.y + y;
+        const local = y * bounds.width + x;
+        if (insideExpandedRect(globalX, globalY, detection.bounds, boxPad)) {
+          removalMask[local] = 255;
+          continue;
+        }
+        if (
+          !insideExpandedRect(
+            globalX,
+            globalY,
+            detection.bounds,
+            candidateMargin,
+          )
+        ) {
+          continue;
+        }
+        if (
+          residuals[local] >= leftoverFloor ||
+          labDistance(sampleColor(image, globalX, globalY), model.flatColor) >=
+            leftoverFloor
+        ) {
+          removalMask[local] = 255;
+        }
+      }
+    }
+  }
   const effectMask = new Uint8Array(size);
   const softMask = new Uint8ClampedArray(size);
   let corePixels = 0;

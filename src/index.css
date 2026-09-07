@@ -1201,7 +1201,7 @@ body:has(.app-root:not([hidden]) .app-shell.is-landing) {
 html:has(.app-root:not([hidden]) .app-shell.is-editor),
 body:has(.app-root:not([hidden]) .app-shell.is-editor) {
   --bg: color-mix(in srgb, var(--coral) 5%, #f4f4f4);
-  --bg-panel: color-mix(in srgb, var(--coral) 3.5%, #fafafa);
+  --bg-panel: #ffffff;
   --bg-hover: color-mix(in srgb, var(--coral) 6%, #ececec);
   --bg-active: color-mix(in srgb, var(--coral) 6%, #e4e4e4);
   background: var(--bg);

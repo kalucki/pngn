@@ -33,7 +33,7 @@ Pidgin, and Arabic (RTL). Credits for the inpainting models live at
 
 Recognized text becomes layers you can rewrite, restyle, move, and rotate.
 Typography covers font (system plus Google Fonts), size, weight, color, stroke,
-and opacity. Mask threshold and mask expansion adjust how aggressively the old
+and opacity. Eraser margin and Keep more background adjust how aggressively the old
 letters are erased.
 
 Export as PNG, JPEG, or WebP. The download is composed locally and never leaves
@@ -62,8 +62,9 @@ weak-residual growth to capture antialiasing, outlines, and nearby shadows.
 
 ## Local assets
 
-PP-OCRv6 tiny ORT weights and dictionary live under
-`public/models/ocr/ppocr-v6-tiny-v1`. ONNX Runtime's WASM binary is bundled by
+PP-OCRv6 medium ORT weights live under `public/models/ocr/ppocr-v6-medium-v1`
+(`pnpm fetch:ocr`). Tiny weights remain at `public/models/ocr/ppocr-v6-tiny-v1`
+if you need to switch back. ONNX Runtime's WASM binary is bundled by
 Vite. Once these assets have been cached, processing does not need an inference
 API or upload the image.
 

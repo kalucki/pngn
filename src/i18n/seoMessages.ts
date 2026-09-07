@@ -92,7 +92,7 @@ export const seoEn = {
     "For the specific job of replacing writing already in an image, yes - especially if you want to avoid a subscription. It is not a replacement for Photoshop’s broader photo-editing tools.",
   "faq.q.quality": "Will the background look intact after I change the text?",
   "faq.a.quality":
-    "pngn reconstructs the pixels behind the letters. Flat colors fill instantly; photos and busy textures can use on-device neural fill (MI-GAN or LaMa). Results depend on the image. You can raise mask expansion if a halo of the old text remains.",
+    "pngn reconstructs the pixels behind the letters. Flat colors fill instantly; photos and busy textures can use on-device neural fill (MI-GAN or LaMa). Results depend on the image. You can raise eraser margin if a halo of the old text remains.",
   "faq.q.offline": "Does this work without sending data to an AI API?",
   "faq.a.offline":
     "Yes. After the in-browser models are cached, processing does not need an inference API. Your image is not sent to a remote model host.",
@@ -208,7 +208,7 @@ export const seoEs = seo({
     "Para el trabajo concreto de sustituir un escrito que ya está en la imagen, sí - sobre todo si quieres evitar una suscripción. No sustituye el resto de herramientas de Photoshop.",
   "faq.q.quality": "¿El fondo se verá intacto después de cambiar el texto?",
   "faq.a.quality":
-    "pngn reconstruye los píxeles detrás de las letras. Los colores planos se rellenan al instante; fotos y texturas complejas pueden usar relleno neuronal en el dispositivo (MI-GAN o LaMa). El resultado depende de la imagen. Sube la expansión de máscara si queda un halo del texto antiguo.",
+    "pngn reconstruye los píxeles detrás de las letras. Los colores planos se rellenan al instante; fotos y texturas complejas pueden usar relleno neuronal en el dispositivo (MI-GAN o LaMa). El resultado depende de la imagen. Sube el margen del borrador si queda un halo del texto antiguo.",
   "faq.q.offline": "¿Funciona sin enviar datos a una API de IA?",
   "faq.a.offline":
     "Sí. Cuando los modelos del navegador están en caché, el proceso no necesita una API de inferencia. Tu imagen no se envía a un modelo remoto.",
@@ -319,7 +319,7 @@ export const seoPl = seo({
     "Przy konkretnym zadaniu podmiany napisu już na obrazie - tak, zwłaszcza jeśli chcesz uniknąć subskrypcji. Nie zastępuje szerszych narzędzi Photoshopa.",
   "faq.q.quality": "Czy tło będzie wyglądać nienaruszone po zmianie tekstu?",
   "faq.a.quality":
-    "pngn odtwarza piksele za literami. Płaskie kolory wypełniają się od razu; zdjęcia i bogate tekstury mogą użyć wypełnienia neuronowego na urządzeniu (MI-GAN lub LaMa). Wynik zależy od obrazu. Zwiększ rozszerzenie maski, jeśli zostaje poświata starego tekstu.",
+    "pngn odtwarza piksele za literami. Płaskie kolory wypełniają się od razu; zdjęcia i bogate tekstury mogą użyć wypełnienia neuronowego na urządzeniu (MI-GAN lub LaMa). Wynik zależy od obrazu. Zwiększ margines gumki, jeśli zostaje poświata starego tekstu.",
   "faq.q.offline": "Czy to działa bez wysyłania danych do API AI?",
   "faq.a.offline":
     "Tak. Po zapisaniu modeli w pamięci przeglądarki przetwarzanie nie potrzebuje API inferencji. Obraz nie trafia do zdalnego modelu.",
@@ -423,7 +423,7 @@ export const seoZh = seo({
     "如果只是替换已经印在图上的字，可以 - 尤其是你不想订阅的时候。它替代不了 Photoshop 的其他修图功能。",
   "faq.q.quality": "改字之后背景看起来会完整吗？",
   "faq.a.quality":
-    "pngn 会重建字母背后的像素。纯色背景立刻填充；照片和复杂纹理可以使用设备上的神经填充（MI-GAN 或 LaMa）。效果因图而异。如果旧字还有一圈残影，可以加大蒙版扩展。",
+    "pngn 会重建字母背后的像素。纯色背景立刻填充；照片和复杂纹理可以使用设备上的神经填充（MI-GAN 或 LaMa）。效果因图而异。如果旧字还有一圈残影，可以加大橡皮擦边距。",
   "faq.q.offline": "不把数据发到 AI API 也能用吗？",
   "faq.a.offline":
     "可以。浏览器模型缓存之后，处理不需要推理 API。图片不会发到远程模型主机。",
@@ -533,7 +533,7 @@ export const seoPcm = seo({
   "faq.q.quality":
     "Di background go still look correct after I change di writing?",
   "faq.a.quality":
-    "pngn dey rebuild di pixels behind di letters. Flat colors fill quick; photos and busy textures fit use neural fill for device (MI-GAN or LaMa). Result depend on di picture. Raise mask expansion if old writing halo still dey.",
+    "pngn dey rebuild di pixels behind di letters. Flat colors fill quick; photos and busy textures fit use neural fill for device (MI-GAN or LaMa). Result depend on di picture. Raise eraser margin if old writing halo still dey.",
   "faq.q.offline": "E dey work without send data to AI API?",
   "faq.a.offline":
     "Yes. After di browser models cache, processing no need inference API. Your picture no dey go remote model host.",
@@ -640,7 +640,7 @@ export const seoAr = seo({
     "لمهمة استبدال كتابة موجودة أصلًا في صورة، نعم - خاصة إن أردت تجنب الاشتراك. وهو ليس بديلًا لأدوات فوتوشوب الأوسع لتحرير الصور.",
   "faq.q.quality": "هل ستبدو الخلفية سليمة بعد تغيير النص؟",
   "faq.a.quality":
-    "يعيد pngn بناء البكسلات خلف الحروف. الألوان المسطحة تُملأ فورًا؛ والصور والأنسجة المزدحمة يمكن أن تستخدم ملءًا عصبيًا على الجهاز (MI-GAN أو LaMa). النتيجة تعتمد على الصورة. ارفع توسيع القناع إن بقي هالة من النص القديم.",
+    "يعيد pngn بناء البكسلات خلف الحروف. الألوان المسطحة تُملأ فورًا؛ والصور والأنسجة المزدحمة يمكن أن تستخدم ملءًا عصبيًا على الجهاز (MI-GAN أو LaMa). النتيجة تعتمد على الصورة. ارفع هامش الممحاة إن بقي هالة من النص القديم.",
   "faq.q.offline": "هل يعمل دون إرسال بيانات إلى واجهة ذكاء اصطناعي؟",
   "faq.a.offline":
     "نعم. بعد تخزين نماذج المتصفح مؤقتًا، لا تحتاج المعالجة إلى واجهة استدلال. لا تُرسل صورتك إلى مضيف نموذج بعيد.",

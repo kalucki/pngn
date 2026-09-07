@@ -36,6 +36,10 @@ const layer = (overrides: Partial<TextLayer> = {}): TextLayer => ({
     reconstructionMethod: 'migan',
     backgroundType: 'flat',
   },
+  removal: {
+    bounds: { x: 10, y: 10, width: 60, height: 24 },
+    mask: new Uint8Array(60 * 24),
+  },
   ...overrides,
 })
 

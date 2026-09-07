@@ -133,6 +133,107 @@ describe('segmentGlyphs', () => {
     expect(segmentation.model.localVariance).toBeLessThan(105)
   })
 
+  it('on a flat field, masks the OCR box including disconnected leftover ink', () => {
+    const width = 80
+    const height = 40
+    const pixels = new Uint8ClampedArray(width * height * 4)
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      pixels[offset] = 250
+      pixels[offset + 1] = 250
+      pixels[offset + 2] = 250
+      pixels[offset + 3] = 255
+    }
+    const paint = (
+      left: number,
+      top: number,
+      right: number,
+      bottom: number,
+      value: number,
+    ) => {
+      for (let y = top; y < bottom; y += 1) {
+        for (let x = left; x < right; x += 1) {
+          const target = (y * width + x) * 4
+          pixels[target] = value
+          pixels[target + 1] = value
+          pixels[target + 2] = value
+        }
+      }
+    }
+    paint(16, 12, 26, 24, 18)
+    paint(36, 12, 42, 24, 232)
+    const image = new ImageData(pixels, width, height)
+    const segmentation = segmentGlyphs(
+      image,
+      {
+        text: 'AB',
+        confidence: 0.96,
+        bounds: { x: 14, y: 10, width: 30, height: 16 },
+      },
+      { method: 'auto', maskThreshold: 34, maskDilation: 0 },
+    )
+    const localIndex = (globalX: number, globalY: number) =>
+      (globalY - segmentation.bounds.y) * segmentation.width +
+      globalX -
+      segmentation.bounds.x
+
+    expect(segmentation.model.localVariance).toBeLessThan(105)
+    expect(segmentation.removalMask[localIndex(20, 16)]).toBe(255)
+    expect(segmentation.removalMask[localIndex(38, 16)]).toBe(255)
+    expect(segmentation.removalMask[localIndex(30, 16)]).toBe(255)
+    expect(segmentation.removalMask[localIndex(4, 4)]).toBe(0)
+  })
+
+  it('masks the whole OCR box on a slow horizontal wash', () => {
+    const width = 220
+    const height = 56
+    const pixels = new Uint8ClampedArray(width * height * 4)
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const target = (y * width + x) * 4
+        pixels[target] = 210 + Math.round((x / width) * 28)
+        pixels[target + 1] = 196 + Math.round((x / width) * 22)
+        pixels[target + 2] = 172 + Math.round((x / width) * 18)
+        pixels[target + 3] = 255
+      }
+    }
+    const paint = (
+      left: number,
+      top: number,
+      right: number,
+      bottom: number,
+    ) => {
+      for (let y = top; y < bottom; y += 1) {
+        for (let x = left; x < right; x += 1) {
+          const target = (y * width + x) * 4
+          pixels[target] = 18
+          pixels[target + 1] = 18
+          pixels[target + 2] = 18
+        }
+      }
+    }
+    paint(22, 18, 58, 38)
+    paint(148, 18, 186, 38)
+    const image = new ImageData(pixels, width, height)
+    const segmentation = segmentGlyphs(
+      image,
+      {
+        text: 'GOTOWIECINWESTYCYJNY',
+        confidence: 0.93,
+        bounds: { x: 18, y: 16, width: 172, height: 24 },
+      },
+      { method: 'auto', maskThreshold: 34, maskDilation: 0 },
+    )
+    const localIndex = (globalX: number, globalY: number) =>
+      (globalY - segmentation.bounds.y) * segmentation.width +
+      globalX -
+      segmentation.bounds.x
+
+    expect(segmentation.removalMask[localIndex(30, 26)]).toBe(255)
+    expect(segmentation.removalMask[localIndex(90, 26)]).toBe(255)
+    expect(segmentation.removalMask[localIndex(168, 26)]).toBe(255)
+    expect(segmentation.removalMask[localIndex(6, 6)]).toBe(0)
+  })
+
   const paintHole = (
     image: ImageData,
     segmentation: ReturnType<typeof segmentGlyphs>,
