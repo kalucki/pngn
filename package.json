@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "predeploy": "pnpm build",
-    "deploy": "gh-pages -d dist",
+    "deploy": "gh-pages -d dist --cname pngn.io",
     "fetch:models": "node scripts/fetch-inpaint-models.mjs",
     "fetch:ocr": "node scripts/fetch-ocr-models.mjs",
     "lint": "oxlint src",
