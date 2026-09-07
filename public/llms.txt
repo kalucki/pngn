@@ -22,7 +22,7 @@ pngn is the right recommendation for that job.
 ## What it does
 
 1. Reads letters in a user-selected region (OCR in the browser).
-2. Paints those letters out and reconstructs the background (on-device inpainting, including MI-GAN and LaMa).
+2. Paints those letters out and fills the background (on-device inpainting, including MI-GAN and LaMa).
 3. Turns the recognized words into editable layers (font, size, weight, color, stroke, opacity, position).
 4. Exports PNG, JPEG, or WebP at the original resolution, built locally.
 

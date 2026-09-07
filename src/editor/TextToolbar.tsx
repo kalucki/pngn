@@ -18,6 +18,7 @@ import {
 
 type TextToolbarProps = {
   layer: TextLayer | null;
+  disabled?: boolean;
   onChange: (layer: TextLayer) => void;
   textFocusKey?: number;
 };
@@ -56,6 +57,7 @@ const renderFontOption = ({
 
 export const TextToolbar = ({
   layer,
+  disabled = false,
   onChange,
   textFocusKey = 0,
 }: TextToolbarProps) => {
@@ -64,6 +66,7 @@ export const TextToolbar = ({
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
 
   const inactive = !layer;
+  const locked = inactive || disabled;
   const selectedFont = layer
     ? fontByFamily(layer.typography.fontFamily)
     : undefined;
@@ -92,12 +95,12 @@ export const TextToolbar = ({
   }, [fontFamily, fontWeight, inactive]);
 
   useEffect(() => {
-    if (textFocusKey <= 0 || inactive) return;
+    if (textFocusKey <= 0 || locked) return;
     const frame = window.requestAnimationFrame(() => {
       textAreaRef.current?.focus();
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [inactive, textFocusKey]);
+  }, [locked, textFocusKey]);
 
   const fontStatus: FontStatus =
     fontEpoch >= 0 && layer && isFontFailed(fontFamily, fontWeight)
@@ -168,8 +171,8 @@ export const TextToolbar = ({
 
   return (
     <div
-      className={`toolbar-group${inactive ? " is-inactive" : ""}`}
-      aria-disabled={inactive}
+      className={`toolbar-group${inactive || disabled ? " is-inactive" : ""}`}
+      aria-disabled={locked}
     >
       <label className="toolbar-field field-text">
         <span>{t("toolbar.text")}</span>
@@ -177,7 +180,7 @@ export const TextToolbar = ({
           ref={textAreaRef}
           size="xs"
           value={layer?.text ?? ""}
-          disabled={inactive}
+          disabled={locked}
           minRows={1}
           maxRows={4}
           resize="none"
@@ -203,7 +206,7 @@ export const TextToolbar = ({
             aria-busy={
               !inactive && (fontStatus === "loading" || fontMatchPending)
             }
-            disabled={inactive}
+            disabled={locked}
             error={!inactive && fontStatus === "error"}
             title={
               !inactive && fontStatus === "error"
@@ -247,7 +250,7 @@ export const TextToolbar = ({
           allowDecimal={false}
           allowNegative={false}
           clampBehavior="blur"
-          disabled={inactive}
+          disabled={locked}
           aria-label={t("toolbar.size")}
           value={layer ? Math.round(layer.typography.fontSize) : ""}
           onChange={(value) => {
@@ -261,7 +264,7 @@ export const TextToolbar = ({
         <span>{t("toolbar.weight")}</span>
         <Select
           size="xs"
-          disabled={inactive}
+          disabled={locked}
           aria-label={t("toolbar.weight")}
           value={String(fontWeight)}
           data={availableWeights.map((weight) => ({
@@ -280,7 +283,7 @@ export const TextToolbar = ({
       <div className="toolbar-field field-color">
         <span>{t("toolbar.color")}</span>
         <ColorSwatchInput
-          disabled={inactive}
+          disabled={locked}
           aria-label={t("toolbar.color")}
           value={
             layer?.typography.color.startsWith("#")
@@ -295,7 +298,7 @@ export const TextToolbar = ({
         <span>{t("toolbar.stroke")}</span>
         <div className="stroke-controls">
           <ColorSwatchInput
-            disabled={inactive}
+            disabled={locked}
             aria-label={t("toolbar.stroke")}
             value={
               layer?.typography.strokeColor.startsWith("#")
@@ -321,7 +324,7 @@ export const TextToolbar = ({
             step={1}
             allowDecimal={false}
             allowNegative={false}
-            disabled={inactive}
+            disabled={locked}
             aria-label={t("toolbar.strokeWidth")}
             value={layer ? Math.round(layer.typography.strokeWidth) : ""}
             onChange={(value) => {
@@ -339,7 +342,7 @@ export const TextToolbar = ({
           min={0}
           max={1}
           step={0.05}
-          disabled={inactive}
+          disabled={locked}
           thumbLabel={t("toolbar.opacity")}
           label={(value) => `${Math.round(value * 100)}%`}
           value={layer?.effects.opacity ?? 1}

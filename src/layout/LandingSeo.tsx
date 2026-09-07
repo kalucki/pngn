@@ -29,6 +29,7 @@ export const LandingSeo = () => {
         <h2>{t('landing.seo.uses.title')}</h2>
         <p>{t('landing.seo.uses.intro')}</p>
         <ul className="landing-seo-uses">
+          <li>{t('landing.seo.uses.ai')}</li>
           <li>{t('landing.seo.uses.screenshots')}</li>
           <li>{t('landing.seo.uses.memes')}</li>
           <li>{t('landing.seo.uses.graphics')}</li>

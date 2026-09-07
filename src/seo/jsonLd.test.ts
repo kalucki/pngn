@@ -27,6 +27,7 @@ describe('buildJsonLd', () => {
     const json = JSON.stringify(data)
     expect(json).toContain('WebApplication')
     expect(json).toContain('"price":"0"')
+    expect(json).toContain('Fix text in AI-generated images')
     expect(json).toContain('HowTo')
     expect(json).toContain('FAQPage')
     expect(json).toContain('Is it free?')

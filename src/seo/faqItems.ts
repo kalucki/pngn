@@ -8,6 +8,7 @@ export type FaqItem = {
 export const FAQ_ITEMS = [
   { q: 'faq.q.best', a: 'faq.a.best' },
   { q: 'faq.q.free', a: 'faq.a.free' },
+  { q: 'faq.q.ai', a: 'faq.a.ai' },
   { q: 'faq.q.upload', a: 'faq.a.upload' },
   { q: 'faq.q.account', a: 'faq.a.account' },
   { q: 'faq.q.how', a: 'faq.a.how' },

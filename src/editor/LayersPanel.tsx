@@ -2,15 +2,12 @@ import type { TextLayer } from '../document/types'
 import { useLocale } from '../i18n/useLocale'
 import { TrashIcon } from '../layout/icons'
 
-export const EXPORT_PREVIEW_ID = '__export-preview__'
-
 type LayersPanelProps = {
   layers: TextLayer[]
   selectedLayerId: string | null
   staleLayerIds?: ReadonlySet<string>
-  hasBackground: boolean
-  removeDisabled?: boolean
-  onSelectLayer: (id: string | null, source?: 'sidebar' | 'canvas') => void
+  disabled?: boolean
+  onSelectLayer: (id: string, source?: 'sidebar' | 'canvas') => void
   onRemoveLayer: (id: string) => void
 }
 
@@ -24,8 +21,7 @@ export const LayersPanel = ({
   layers,
   selectedLayerId,
   staleLayerIds,
-  hasBackground,
-  removeDisabled = false,
+  disabled = false,
   onSelectLayer,
   onRemoveLayer,
 }: LayersPanelProps) => {
@@ -33,7 +29,7 @@ export const LayersPanel = ({
   const ordered = [...layers].reverse()
 
   return (
-    <div className="layers-panel">
+    <div className={`layers-panel${disabled ? ' is-disabled' : ''}`}>
       <h2 className="layers-heading">{t('layers.title')}</h2>
       {layers.length === 0 ? (
         <p className="layers-empty">{t('layers.empty')}</p>
@@ -52,6 +48,7 @@ export const LayersPanel = ({
                   type="button"
                   className="layer-item"
                   aria-pressed={selected}
+                  disabled={disabled}
                   title={stale ? t('app.applySettingsHint') : undefined}
                   onClick={() => onSelectLayer(layer.id, 'sidebar')}
                 >
@@ -70,7 +67,7 @@ export const LayersPanel = ({
                 <button
                   type="button"
                   className="layer-delete"
-                  disabled={removeDisabled}
+                  disabled={disabled}
                   aria-label={t('layers.remove')}
                   title={t('layers.remove')}
                   onClick={() => onRemoveLayer(layer.id)}
@@ -81,32 +78,6 @@ export const LayersPanel = ({
             </li>
           )
         })}
-        {hasBackground ? (
-          <>
-            <li>
-              <button
-                type="button"
-                className={`layer-item is-export-preview${selectedLayerId === EXPORT_PREVIEW_ID ? ' is-selected' : ''}`}
-                aria-pressed={selectedLayerId === EXPORT_PREVIEW_ID}
-                onClick={() => onSelectLayer(EXPORT_PREVIEW_ID, 'sidebar')}
-              >
-                <span className="layer-type is-preview" aria-hidden="true" />
-                <span className="layer-label">{t('layers.exportPreview')}</span>
-              </button>
-            </li>
-            <li>
-              <button
-                type="button"
-                className={`layer-item is-background${selectedLayerId === null ? ' is-selected' : ''}`}
-                aria-pressed={selectedLayerId === null}
-                onClick={() => onSelectLayer(null, 'sidebar')}
-              >
-                <span className="layer-type is-checker" aria-hidden="true" />
-                <span className="layer-label">{t('layers.background')}</span>
-              </button>
-            </li>
-          </>
-        ) : null}
       </ul>
     </div>
   )

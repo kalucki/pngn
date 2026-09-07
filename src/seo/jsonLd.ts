@@ -18,6 +18,7 @@ type JsonLdInput = {
 
 const SOFTWARE_FEATURES = [
   'Change text on an image in the browser',
+  'Fix text in AI-generated images',
   'Replace writing on screenshots, memes, posters, and photos',
   'No account required',
   'Images never leave the device',
@@ -60,6 +61,7 @@ export const buildJsonLd = ({
     inLanguage: ['en', 'es', 'pl', 'zh-Hans', 'pcm', 'ar'],
     about: [
       'Change text on image',
+      'Fix text in AI-generated images',
       'Edit text in image online free',
       'Replace text in photo without uploading',
     ],
@@ -75,7 +77,7 @@ export const buildJsonLd = ({
     '@id': `${home}#howto`,
     name: 'How to change text on an image online for free',
     description:
-      'Replace text that is already part of a PNG, JPEG, or WebP in the browser. pngn never uploads the file.',
+      'Replace text that is already part of a PNG, JPEG, or WebP in the browser, including to fix text in AI-generated images. pngn never uploads the file.',
     totalTime: 'PT2M',
     tool: { '@id': `${home}#app` },
     step: [
@@ -139,7 +141,7 @@ export const buildJsonLd = ({
       name: 'pngn',
       url: home,
       description:
-        'Free in-browser tool to change text on any image. No account, no upload.',
+        'Free in-browser tool to change text on any image, including to fix text in AI-generated images. No account, no upload.',
       inLanguage: ['en', 'es', 'pl', 'zh-Hans', 'pcm', 'ar'],
     },
     app,

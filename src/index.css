@@ -514,10 +514,18 @@ output {
   padding: 0.4rem 0.55rem;
 }
 
-.sidebar-header .sidebar-export-button {
+.sidebar-header .sidebar-export-button,
+.sidebar-header .sidebar-preview-button {
   width: 100%;
   font-size: 0.78rem;
   padding: 0.4rem 0.55rem;
+}
+
+.sidebar-header .sidebar-preview-button[aria-pressed="true"],
+.sidebar-header .sidebar-preview-button[aria-pressed="true"]:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+  color: var(--accent);
 }
 
 .upload-button.is-disabled {
@@ -604,18 +612,32 @@ output {
   box-shadow: none;
 }
 
-.layer-item:hover {
+.layer-item:hover:not(:disabled) {
   background: var(--bg-hover);
   color: var(--text);
 }
 
-.layer-row:hover {
+.layer-row:hover:not(:has(.layer-item:disabled)) {
   background: var(--bg-hover);
 }
 
-.layer-row:hover .layer-item {
+.layer-row:hover .layer-item:not(:disabled) {
   background: transparent;
   color: var(--text);
+}
+
+.layers-panel.is-disabled .layers-list {
+  opacity: 0.55;
+}
+
+.layers-panel.is-disabled button:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.layer-item:disabled:hover,
+.layer-delete:disabled:hover {
+  background: transparent;
 }
 
 .layer-item.is-selected,
@@ -635,15 +657,6 @@ output {
 [dir="rtl"] .layer-item.is-selected,
 [dir="rtl"] .layer-row.is-selected {
   box-shadow: inset -2px 0 0 var(--accent);
-}
-
-.layer-item.is-background,
-.layer-item.is-export-preview {
-  color: var(--text-faint);
-}
-
-.layer-item.is-export-preview {
-  margin-top: 0.35rem;
 }
 
 .layer-label {
@@ -691,20 +704,6 @@ output {
   font-size: 0.62rem;
   font-weight: 800;
   line-height: 1;
-}
-
-.layer-type.is-preview {
-  background:
-    linear-gradient(#9ec9ef 0 52%, #7db56c 52%);
-}
-
-.layer-type.is-checker,
-.layer-swatch.is-checker {
-  background:
-    linear-gradient(45deg, #d4d4d4 25%, transparent 25%) 0 0 / 6px 6px,
-    linear-gradient(45deg, transparent 75%, #d4d4d4 75%) 0 0 / 6px 6px,
-    linear-gradient(45deg, transparent 75%, #d4d4d4 75%) 3px -3px / 6px 6px,
-    linear-gradient(45deg, #d4d4d4 25%, #fafafa 25%) 3px 3px / 6px 6px;
 }
 
 .layer-swatch {
@@ -1555,6 +1554,14 @@ html.js #seo-prerender {
   transition: width 220ms ease;
 }
 
+.status-card-hint {
+  margin: 0.5rem 0 0;
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  font-weight: 400;
+  line-height: 1.35;
+}
+
 .status-card-bar::after {
   content: "";
   position: absolute;
@@ -1620,9 +1627,17 @@ html.js #seo-prerender {
 }
 
 .selection-hint p {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   margin: 0;
-  color: var(--text-muted);
+  color: var(--text);
   font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.selection-hint p svg {
+  flex-shrink: 0;
 }
 
 .selection-hint .selection-actions {

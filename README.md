@@ -19,9 +19,9 @@ only refreshes Storia label metadata and the Google Fonts catalog.
 Open the local URL shown by Vite, drop a PNG, JPEG, or WebP, drag a rectangle
 around the text to change, then edit and export at the original resolution. OCR
 runs only on an automatically padded version of that selection; segmentation
-and reconstruction still use surrounding full-resolution source pixels.
+and background fill still use surrounding full-resolution source pixels.
 
-Use **Select another area** to process more regions. Previously reconstructed
+Use **Select another area** to process more regions. Previously filled
 background pixels and edited layers stay in place, and every text rectangle
 remains visible on the editor canvas.
 
@@ -39,9 +39,9 @@ letters are erased.
 Export as PNG, JPEG, or WebP. The download is composed locally and never leaves
 the browser.
 
-## Reconstruction
+## Background fill
 
-Choose a fill from the Reconstruction control:
+Choose a method from the Background fill control:
 
 - **Auto** - instant color or gradient fill on flat backgrounds; LaMa on photos
   and busy textures.
@@ -54,7 +54,7 @@ Both neural models run fully client-side via ONNX Runtime Web (WebGPU, WASM
 fallback). Weights are fetched from Hugging Face, prefetched into Cache
 Storage, and loaded on first use. Neural fills use a padded context crop and a
 feathered composite so there are no hard seams. If a neural model fails to load,
-reconstruction falls back to OpenCV Telea.
+background fill falls back to OpenCV Telea.
 
 Glyph masks use crop-local robust background fitting, perceptual Lab residuals,
 adaptive noise thresholds, color-cluster rejection, morphology, and connected

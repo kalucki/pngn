@@ -14,6 +14,8 @@ import {
 
 /** How long each typeface stays on screen before the next shuffle. */
 const CYCLE_MS = 2900;
+/** Sit on the first typeface before the first shuffle, so the headline can be read. */
+const INITIAL_DELAY_MS = 3500;
 /** Stagger between characters resolving, in ms. */
 const CHAR_STAGGER_MS = 7;
 /** How long each character stays scrambled before locking in, in ms. */
@@ -37,6 +39,7 @@ export const HeroTitle = ({ text }: HeroTitleProps) => {
   const [fontIndex, setFontIndex] = useState(0);
   const [display, setDisplay] = useState(text);
   const [shuffleKey, setShuffleKey] = useState(0);
+  const [cycling, setCycling] = useState(false);
   const frameRef = useRef<number | null>(null);
 
   const activeFont = HERO_FONTS[fontIndex] ?? HERO_FONTS[0];
@@ -109,22 +112,32 @@ export const HeroTitle = ({ text }: HeroTitleProps) => {
     frameRef.current = requestAnimationFrame(tick);
   }, [characters, text]);
 
-  // Trigger a shuffle whenever the typeface (or the source text) changes.
+  // Shuffle when the typeface changes. `cycling` stays false until the
+  // initial delay elapses, so the first paint is the real headline.
   useEffect(() => {
+    if (!cycling) return;
     setShuffleKey((key) => key + 1);
     runScramble();
     return () => {
       if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
     };
-  }, [fontIndex, runScramble]);
+  }, [cycling, fontIndex, runScramble]);
 
-  // Advance through the typefaces on a loop.
+  // Sit on the first typeface, then cycle at CYCLE_MS.
   useEffect(() => {
     if (HERO_FONTS.length <= 1) return;
-    const id = window.setInterval(() => {
+    let intervalId = 0;
+    const timeoutId = window.setTimeout(() => {
+      setCycling(true);
       setFontIndex((index) => (index + 1) % HERO_FONTS.length);
-    }, CYCLE_MS);
-    return () => window.clearInterval(id);
+      intervalId = window.setInterval(() => {
+        setFontIndex((index) => (index + 1) % HERO_FONTS.length);
+      }, CYCLE_MS);
+    }, INITIAL_DELAY_MS);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
+    };
   }, []);
 
   return (

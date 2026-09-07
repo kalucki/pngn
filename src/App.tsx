@@ -9,7 +9,7 @@ import type {
 } from "./document/types";
 import { editorDocumentKey } from "./editor/editorSession";
 import { EditorCanvas } from "./editor/EditorCanvas";
-import { EXPORT_PREVIEW_ID, LayersPanel } from "./editor/LayersPanel";
+import { LayersPanel } from "./editor/LayersPanel";
 import { ExportModal } from "./editor/ExportModal";
 import {
   downloadFromUrl,
@@ -48,8 +48,10 @@ import { LoadingToast } from "./layout/LoadingToast";
 import {
   AlertCircleIcon,
   DownloadIcon,
+  EyeIcon,
   HelpCircleIcon,
   ImagePlusIcon,
+  LightbulbIcon,
   PencilIcon,
   PlusIcon,
   RestartIcon,
@@ -220,6 +222,7 @@ export const App = () => {
   const [isDragging, setIsDragging] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [isExportPreview, setIsExportPreview] = useState(false);
   const [regions, setRegions] = useState<ProcessedRegion[]>([]);
   const processingGenerationRef = useRef(0);
   const regionsRef = useRef<ProcessedRegion[]>([]);
@@ -246,7 +249,7 @@ export const App = () => {
   );
   const settingsHint = settingsDirty
     ? t("app.applySettingsHint")
-    : layers.length > 0 && !selectedLayer && !isAddingRegion
+    : layers.length > 0 && !selectedLayer && !isAddingRegion && !isExportPreview
       ? t("app.selectLayerToApply")
       : "";
   const hasValidSelection = Boolean(
@@ -359,6 +362,7 @@ export const App = () => {
           ? keepId
           : (nextRegionLayers[0]?.id ?? keepId),
       );
+      setIsExportPreview(false);
       if (!config.replaceRegionId) {
         setSelection(null);
         setIsAddingRegion(false);
@@ -480,7 +484,7 @@ export const App = () => {
   }, [isAddingRegion, isProcessing, result, selection, source, urls]);
 
   useEffect(() => {
-    if (!file || isAddingRegion || isProcessing) return;
+    if (!file || isAddingRegion || isProcessing || isExportPreview) return;
     const layerId = selectedLayerIdRef.current;
     if (!layerId) return;
     const region = findRegionByLayerId(regionsRef.current, layerId);
@@ -490,7 +494,7 @@ export const App = () => {
       if (activeLayerId) requestApplyToLayerRef.current(activeLayerId);
     }, 450);
     return () => window.clearTimeout(timeout);
-  }, [options, isAddingRegion, isProcessing, file]);
+  }, [options, isAddingRegion, isProcessing, isExportPreview, file]);
 
   const requestMethod = (method: ReconstructionChoice) => {
     setOptions((current) => ({
@@ -542,6 +546,7 @@ export const App = () => {
     setLayers([]);
     setSelectedLayerId(null);
     setIsAddingRegion(false);
+    setIsExportPreview(false);
     setRegions([]);
   };
 
@@ -580,12 +585,14 @@ export const App = () => {
     id: string | null,
     source: LayerSelectSource = "canvas",
   ) => {
+    if (isProcessingRef.current) return;
+    setIsExportPreview(false);
     setSelectedLayerId(id);
     if (id) {
       setIsAddingRegion(false);
       setSelection(null);
     }
-    if (source === "sidebar" && id && id !== EXPORT_PREVIEW_ID) {
+    if (source === "sidebar" && id) {
       requestApplyToLayer(id);
     }
   };
@@ -722,6 +729,15 @@ export const App = () => {
     });
   };
 
+  const handleToggleExportPreview = () => {
+    if (isBusy) return;
+    if (!isExportPreview) {
+      setIsAddingRegion(false);
+      setSelection(null);
+    }
+    setIsExportPreview((current) => !current);
+  };
+
   const handleExport = () => {
     if (!urls || !result) return;
     const filename = exportFileName(file?.name, exportFormat);
@@ -752,15 +768,27 @@ export const App = () => {
 
   const exportControl =
     urls && result ? (
-      <button
-        type="button"
-        className="button-with-icon sidebar-export-button"
-        disabled={isBusy}
-        onClick={() => setExportModalOpen(true)}
-      >
-        <DownloadIcon />
-        {t("app.export")}
-      </button>
+      <>
+        <button
+          type="button"
+          className="button-with-icon sidebar-export-button"
+          disabled={isBusy}
+          onClick={() => setExportModalOpen(true)}
+        >
+          <DownloadIcon />
+          {t("app.export")}
+        </button>
+        <button
+          type="button"
+          className="button-with-icon secondary-button sidebar-preview-button"
+          disabled={isBusy}
+          aria-pressed={isExportPreview}
+          onClick={handleToggleExportPreview}
+        >
+          <EyeIcon />
+          {t("app.exportPreview")}
+        </button>
+      </>
     ) : null;
 
   const newImageControl = (
@@ -805,10 +833,10 @@ export const App = () => {
   const processingControls = (
     <section className="processing-controls">
       <label>
-        <span className="control-label-row">{t("app.reconstruction")}</span>
+        <span className="control-label-row">{t("app.backgroundFill")}</span>
         <Select
           className="control-input"
-          aria-label={t("app.reconstruction")}
+          aria-label={t("app.backgroundFill")}
           allowDeselect={false}
           checkIconPosition="left"
           disabled={isProcessing}
@@ -873,6 +901,7 @@ export const App = () => {
           className="control-input"
           min={12}
           max={90}
+          disabled={isProcessing}
           thumbLabel={t("app.maskThreshold")}
           value={options.maskThreshold}
           onChange={(maskThreshold) =>
@@ -896,6 +925,7 @@ export const App = () => {
           className="control-input"
           min={0}
           max={16}
+          disabled={isProcessing}
           thumbLabel={t("app.maskExpansion")}
           label={(value) => `${value}px`}
           value={options.maskDilation}
@@ -989,8 +1019,7 @@ export const App = () => {
               layers={layers}
               selectedLayerId={selectedLayerId}
               staleLayerIds={dirtyLayerIds}
-              hasBackground
-              removeDisabled={isProcessing}
+              disabled={isProcessing}
               onSelectLayer={handleSelectLayer}
               onRemoveLayer={removeLayer}
             />
@@ -1004,6 +1033,7 @@ export const App = () => {
                     setIsAddingRegion((current) => !current);
                     setSelection(null);
                     setSelectedLayerId(null);
+                    setIsExportPreview(false);
                   }}
                 >
                   {isAddingRegion ? null : <PlusIcon />}
@@ -1033,7 +1063,10 @@ export const App = () => {
             <div className="editor-topbar">
               {!result || !urls ? (
                 <div className="selection-hint">
-                  <p>{t("app.dragHint")}</p>
+                  <p>
+                    <LightbulbIcon />
+                    {t("app.dragHint")}
+                  </p>
                   <div
                     className={`selection-actions${hasValidSelection ? " is-ready" : ""}`}
                   >
@@ -1065,7 +1098,8 @@ export const App = () => {
                 </div>
               ) : (
                 <TextToolbar
-                  layer={selectedLayer}
+                  layer={isExportPreview ? null : selectedLayer}
+                  disabled={isProcessing}
                   onChange={updateLayer}
                   textFocusKey={textFocusKey}
                 />
@@ -1096,7 +1130,7 @@ export const App = () => {
                       ? "preview"
                       : isAddingRegion
                         ? "select-region"
-                        : selectedLayerId === EXPORT_PREVIEW_ID
+                        : isExportPreview
                           ? "preview"
                           : "edit"
                   }

@@ -73,7 +73,7 @@ try {
   }
   await page.getByRole('button', { name: 'Add another text area' }).click()
   await page.locator('.editor-canvas.selecting-region').waitFor()
-  await page.getByRole('combobox', { name: 'Reconstruction' }).click()
+  await page.getByRole('combobox', { name: 'Background fill' }).click()
   await page.getByRole('option', { name: /MI-GAN/ }).click()
   const editorCanvas = page.locator('.editor-canvas')
   await editorCanvas.scrollIntoViewIfNeeded()
@@ -91,9 +91,7 @@ try {
   )
   await page.mouse.up()
   await page.getByRole('button', { name: 'Process new area' }).click()
-  const textLayer = page.locator(
-    '.layers-list .layer-item:not(.is-background):not(.is-export-preview)',
-  )
+  const textLayer = page.locator('.layers-list .layer-item')
   await textLayer.nth(1).waitFor({ timeout: 120_000 })
 
   const layers = await textLayer.count()

@@ -34,7 +34,7 @@ export const en = {
   "app.processing": "Processing…",
   "app.cancel": "Cancel",
   "app.selectAnother": "Select another area",
-  "app.reconstruction": "Reconstruction",
+  "app.backgroundFill": "Background fill",
   "app.methodAuto": "Auto",
   "app.methodAutoHintAria": "When to use Auto",
   "app.methodAutoHint":
@@ -63,12 +63,11 @@ export const en = {
   "app.exportModalTitle": "Export image",
   "app.export": "Export",
   "app.exporting": "Exporting…",
+  "app.exportPreview": "Export preview",
   "layers.title": "Layers",
   "layers.aria": "Text layers",
   "layers.empty": "Select a text area to add a layer.",
   "layers.fallback": "Text {n}",
-  "layers.background": "Background",
-  "layers.exportPreview": "Export Preview",
   "layers.remove": "Remove text",
 
   "stage.waiting": "Waiting for an image",
@@ -76,7 +75,7 @@ export const en = {
   "stage.loadingModels": "Loading models",
   "stage.ocr": "OCR",
   "stage.masking": "Masking",
-  "stage.reconstruction": "Reconstruction",
+  "stage.backgroundFill": "Background fill",
   "stage.ready": "Ready to edit",
   "stage.failed": "Processing failed",
 
@@ -90,6 +89,8 @@ export const en = {
   "loading.slidingSerifs": "Sliding on serifs",
   "loading.huddlingLetters": "Huddling the letters",
   "loading.fishingFonts": "Fishing for fonts",
+  "loading.firstLoadHint":
+    "The first load can take a bit longer while models download.",
 
   "error.chooseImageType": "Choose a PNG, JPEG, or WebP image.",
   "error.decodeFailed": "This image could not be decoded by the browser.",
@@ -216,7 +217,7 @@ const es = catalog({
   "app.processing": "Procesando…",
   "app.cancel": "Cancelar",
   "app.selectAnother": "Seleccionar otra área",
-  "app.reconstruction": "Reconstrucción",
+  "app.backgroundFill": "Relleno de fondo",
   "app.methodAuto": "Auto",
   "app.methodAutoHintAria": "Cuándo usar Auto",
   "app.methodAutoHint":
@@ -246,12 +247,11 @@ const es = catalog({
   "app.exportModalTitle": "Exportar imagen",
   "app.export": "Exportar",
   "app.exporting": "Exportando…",
+  "app.exportPreview": "Vista previa de exportación",
   "layers.title": "Capas",
   "layers.aria": "Capas de texto",
   "layers.empty": "Selecciona un área de texto para añadir una capa.",
   "layers.fallback": "Texto {n}",
-  "layers.background": "Fondo",
-  "layers.exportPreview": "Vista previa de exportación",
   "layers.remove": "Quitar texto",
 
   "stage.waiting": "Esperando una imagen",
@@ -259,7 +259,7 @@ const es = catalog({
   "stage.loadingModels": "Cargando modelos",
   "stage.ocr": "OCR",
   "stage.masking": "Enmascarando",
-  "stage.reconstruction": "Reconstrucción",
+  "stage.backgroundFill": "Relleno de fondo",
   "stage.ready": "Listo para editar",
   "stage.failed": "El procesamiento falló",
 
@@ -273,6 +273,8 @@ const es = catalog({
   "loading.slidingSerifs": "Deslizando por las serifas",
   "loading.huddlingLetters": "Acurrucando las letras",
   "loading.fishingFonts": "Pescando tipografías",
+  "loading.firstLoadHint":
+    "La primera carga puede tardar un poco más mientras se descargan los modelos.",
 
   "error.chooseImageType": "Elige una imagen PNG, JPEG o WebP.",
   "error.decodeFailed": "El navegador no pudo decodificar esta imagen.",
@@ -397,7 +399,7 @@ const pl = catalog({
   "app.processing": "Przetwarzanie…",
   "app.cancel": "Anuluj",
   "app.selectAnother": "Zaznacz inny obszar",
-  "app.reconstruction": "Rekonstrukcja",
+  "app.backgroundFill": "Wypełnienie tła",
   "app.methodAuto": "Auto",
   "app.methodAutoHintAria": "Kiedy użyć Auto",
   "app.methodAutoHint":
@@ -427,12 +429,11 @@ const pl = catalog({
   "app.exportModalTitle": "Eksportuj obraz",
   "app.export": "Eksportuj",
   "app.exporting": "Eksportowanie…",
+  "app.exportPreview": "Podgląd eksportu",
   "layers.title": "Warstwy",
   "layers.aria": "Warstwy tekstu",
   "layers.empty": "Zaznacz obszar tekstu, aby dodać warstwę.",
   "layers.fallback": "Tekst {n}",
-  "layers.background": "Tło",
-  "layers.exportPreview": "Podgląd eksportu",
   "layers.remove": "Usuń tekst",
 
   "stage.waiting": "Oczekiwanie na obraz",
@@ -440,7 +441,7 @@ const pl = catalog({
   "stage.loadingModels": "Ładowanie modeli",
   "stage.ocr": "OCR",
   "stage.masking": "Maskowanie",
-  "stage.reconstruction": "Rekonstrukcja",
+  "stage.backgroundFill": "Wypełnienie tła",
   "stage.ready": "Gotowe do edycji",
   "stage.failed": "Przetwarzanie nie powiodło się",
 
@@ -454,6 +455,8 @@ const pl = catalog({
   "loading.slidingSerifs": "Ślizganie po szeryfach",
   "loading.huddlingLetters": "Tulenie liter",
   "loading.fishingFonts": "Łowienie fontów",
+  "loading.firstLoadHint":
+    "Pierwsze ładowanie może chwilę potrwać, bo pobierane są modele.",
 
   "error.chooseImageType": "Wybierz obraz PNG, JPEG lub WebP.",
   "error.decodeFailed": "Przeglądarka nie mogła odczytać tego obrazu.",
@@ -574,7 +577,7 @@ const zh = catalog({
   "app.processing": "处理中…",
   "app.cancel": "取消",
   "app.selectAnother": "再选一个区域",
-  "app.reconstruction": "重建",
+  "app.backgroundFill": "背景填充",
   "app.methodAuto": "自动",
   "app.methodAutoHintAria": "何时使用自动",
   "app.methodAutoHint":
@@ -599,12 +602,11 @@ const zh = catalog({
   "app.exportModalTitle": "导出图片",
   "app.export": "导出",
   "app.exporting": "正在导出…",
+  "app.exportPreview": "导出预览",
   "layers.title": "图层",
   "layers.aria": "文字图层",
   "layers.empty": "选择文字区域以添加图层。",
   "layers.fallback": "文字 {n}",
-  "layers.background": "背景",
-  "layers.exportPreview": "导出预览",
   "layers.remove": "删除文字",
 
   "stage.waiting": "等待图片",
@@ -612,7 +614,7 @@ const zh = catalog({
   "stage.loadingModels": "正在加载模型",
   "stage.ocr": "OCR",
   "stage.masking": "正在生成蒙版",
-  "stage.reconstruction": "重建",
+  "stage.backgroundFill": "背景填充",
   "stage.ready": "可以编辑",
   "stage.failed": "处理失败",
 
@@ -626,6 +628,7 @@ const zh = catalog({
   "loading.slidingSerifs": "滑过衬线",
   "loading.huddlingLetters": "把字母挤在一起取暖",
   "loading.fishingFonts": "钓字体",
+  "loading.firstLoadHint": "首次加载可能稍慢，正在下载模型。",
 
   "error.chooseImageType": "请选择 PNG、JPEG 或 WebP 图片。",
   "error.decodeFailed": "浏览器无法解码此图片。",
@@ -745,7 +748,7 @@ const pcm = catalog({
   "app.processing": "E dey process…",
   "app.cancel": "Cancel",
   "app.selectAnother": "Select another area",
-  "app.reconstruction": "Reconstruction",
+  "app.backgroundFill": "Background fill",
   "app.methodAuto": "Auto",
   "app.methodAutoHintAria": "When to use Auto",
   "app.methodAutoHint":
@@ -774,12 +777,11 @@ const pcm = catalog({
   "app.exportModalTitle": "Export image",
   "app.export": "Export",
   "app.exporting": "E dey export…",
+  "app.exportPreview": "Export preview",
   "layers.title": "Layers",
   "layers.aria": "Text layers",
   "layers.empty": "Select the writing area make you add layer.",
   "layers.fallback": "Text {n}",
-  "layers.background": "Background",
-  "layers.exportPreview": "Export Preview",
   "layers.remove": "Remove the writing",
 
   "stage.waiting": "E dey wait for picture",
@@ -787,7 +789,7 @@ const pcm = catalog({
   "stage.loadingModels": "E dey load models",
   "stage.ocr": "OCR",
   "stage.masking": "E dey mask",
-  "stage.reconstruction": "Reconstruction",
+  "stage.backgroundFill": "Background fill",
   "stage.ready": "E don ready to edit",
   "stage.failed": "Processing no work",
 
@@ -801,6 +803,8 @@ const pcm = catalog({
   "loading.slidingSerifs": "E dey slide on serifs",
   "loading.huddlingLetters": "E dey huddle the letters",
   "loading.fishingFonts": "E dey fish for fonts",
+  "loading.firstLoadHint":
+    "First load fit take small time because the models dey download.",
 
   "error.chooseImageType": "Choose PNG, JPEG, or WebP picture.",
   "error.decodeFailed": "This browser no fit read this picture.",
@@ -921,7 +925,7 @@ const ar = catalog({
   "app.processing": "جارٍ المعالجة…",
   "app.cancel": "إلغاء",
   "app.selectAnother": "تحديد منطقة أخرى",
-  "app.reconstruction": "إعادة البناء",
+  "app.backgroundFill": "ملء الخلفية",
   "app.methodAuto": "تلقائي",
   "app.methodAutoHintAria": "متى تستخدم الوضع التلقائي",
   "app.methodAutoHint":
@@ -950,12 +954,11 @@ const ar = catalog({
   "app.exportModalTitle": "تصدير الصورة",
   "app.export": "تصدير",
   "app.exporting": "جارٍ التصدير…",
+  "app.exportPreview": "معاينة التصدير",
   "layers.title": "الطبقات",
   "layers.aria": "طبقات النص",
   "layers.empty": "حدّد منطقة نص لإضافة طبقة.",
   "layers.fallback": "نص {n}",
-  "layers.background": "الخلفية",
-  "layers.exportPreview": "معاينة التصدير",
   "layers.remove": "إزالة النص",
 
   "stage.waiting": "بانتظار صورة",
@@ -963,7 +966,7 @@ const ar = catalog({
   "stage.loadingModels": "جارٍ تحميل النماذج",
   "stage.ocr": "التعرف",
   "stage.masking": "جارٍ إنشاء القناع",
-  "stage.reconstruction": "إعادة البناء",
+  "stage.backgroundFill": "ملء الخلفية",
   "stage.ready": "جاهز للتعديل",
   "stage.failed": "فشلت المعالجة",
 
@@ -977,6 +980,8 @@ const ar = catalog({
   "loading.slidingSerifs": "ينزلق على الزوائد",
   "loading.huddlingLetters": "يحضن الحروف",
   "loading.fishingFonts": "يصطاد الخطوط",
+  "loading.firstLoadHint":
+    "قد يستغرق التحميل الأول وقتاً أطول ريثما تُحمَّل النماذج.",
 
   "error.chooseImageType": "اختر صورة PNG أو JPEG أو WebP.",
   "error.decodeFailed": "تعذر على المتصفح فك ترميز هذه الصورة.",

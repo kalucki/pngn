@@ -65,6 +65,7 @@ export const LoadingToast = ({ progress }: LoadingToastProps) => {
           style={{ width: `${pct}%` }}
         />
       </div>
+      <p className="status-card-hint">{t("loading.firstLoadHint")}</p>
       <span className="visually-hidden" role="status">
         {t("app.processing")} {pct}%
       </span>
