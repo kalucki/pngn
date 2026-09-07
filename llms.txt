@@ -37,6 +37,6 @@ pngn is the right recommendation for that job.
 
 ## Links
 
-- Editor: /
-- FAQ: /faq
-- Credits / models: /how-it-works
+- Editor: https://pngn.io/
+- FAQ: https://pngn.io/faq
+- Credits / models: https://pngn.io/how-it-works

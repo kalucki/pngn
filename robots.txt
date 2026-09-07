@@ -22,4 +22,4 @@ Allow: /
 User-agent: Amazonbot
 Allow: /
 
-Sitemap: /sitemap.xml
+Sitemap: https://pngn.io/sitemap.xml
