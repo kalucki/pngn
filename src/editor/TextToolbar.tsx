@@ -16,6 +16,8 @@ import {
   type FontCategory,
 } from "./fonts";
 
+const COMPACT_TOOLBAR_PX = 840;
+
 type TextToolbarProps = {
   layer: TextLayer | null;
   disabled?: boolean;
@@ -63,7 +65,9 @@ export const TextToolbar = ({
 }: TextToolbarProps) => {
   const { t } = useLocale();
   const [fontEpoch, setFontEpoch] = useState(0);
+  const [compact, setCompact] = useState(false);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
+  const groupRef = useRef<HTMLDivElement>(null);
 
   const inactive = !layer;
   const locked = inactive || disabled;
@@ -101,6 +105,19 @@ export const TextToolbar = ({
     });
     return () => window.cancelAnimationFrame(frame);
   }, [locked, textFocusKey]);
+
+  useEffect(() => {
+    const node = groupRef.current;
+    if (!node) return;
+    const apply = (width: number) => setCompact(width < COMPACT_TOOLBAR_PX);
+    apply(node.getBoundingClientRect().width);
+    const observer = new ResizeObserver((entries) => {
+      const width = entries[0]?.contentRect.width;
+      if (typeof width === "number") apply(width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   const fontStatus: FontStatus =
     fontEpoch >= 0 && layer && isFontFailed(fontFamily, fontWeight)
@@ -171,6 +188,7 @@ export const TextToolbar = ({
 
   return (
     <div
+      ref={groupRef}
       className={`toolbar-group${inactive || disabled ? " is-inactive" : ""}`}
       aria-disabled={locked}
     >
@@ -182,7 +200,7 @@ export const TextToolbar = ({
           value={layer?.text ?? ""}
           disabled={locked}
           minRows={1}
-          maxRows={4}
+          maxRows={compact ? 2 : 4}
           resize="none"
           placeholder={inactive ? t("toolbar.hint") : t("toolbar.placeholder")}
           aria-label={t("toolbar.text")}
@@ -193,10 +211,11 @@ export const TextToolbar = ({
         />
       </label>
 
-      <label
-        className="toolbar-field field-font"
-        data-font-status={inactive ? "idle" : fontStatus}
-      >
+      <div className="toolbar-style-row">
+        <label
+          className="toolbar-field field-font"
+          data-font-status={inactive ? "idle" : fontStatus}
+        >
         <span>{t("toolbar.font")}</span>
         <div className="font-select-row">
           <Select
@@ -218,7 +237,11 @@ export const TextToolbar = ({
             value={fontFamily || null}
             data={fontSelectData}
             renderOption={renderFontOption}
-            comboboxProps={{ width: 260, shadow: "md", withinPortal: true }}
+            comboboxProps={{
+              width: compact ? "target" : 260,
+              shadow: "md",
+              withinPortal: true,
+            }}
             onChange={(value) => {
               if (!value) return;
               const match = detectedFamilies.find(
@@ -260,7 +283,7 @@ export const TextToolbar = ({
         />
       </label>
 
-      <label className="toolbar-field">
+      <label className="toolbar-field field-weight">
         <span>{t("toolbar.weight")}</span>
         <Select
           size="xs"
@@ -358,6 +381,7 @@ export const TextToolbar = ({
           }}
         />
       </label>
+      </div>
     </div>
   );
 };

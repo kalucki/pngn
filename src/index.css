@@ -778,13 +778,18 @@ output {
   min-width: 0;
   min-height: 0;
   background: var(--bg);
+  container-type: inline-size;
+  container-name: editor-main;
 }
 
 .editor-topbar {
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 0.55rem 0.75rem;
+  min-width: 0;
+  max-width: 100%;
   border-bottom: 1px solid var(--border);
   background: var(--bg-panel);
   padding: 0.45rem 0.75rem;
@@ -1737,6 +1742,11 @@ html.js #seo-prerender {
   align-items: flex-end;
   gap: 0.6rem 0.7rem;
   flex: 1 1 auto;
+  min-width: 0;
+}
+
+.toolbar-style-row {
+  display: contents;
 }
 
 .toolbar-group.is-inactive {
@@ -1990,6 +2000,10 @@ html.js #seo-prerender {
 
 .field-size {
   width: 5.8rem;
+}
+
+.field-weight {
+  min-width: 7.2rem;
 }
 
 .field-opacity .opacity-slider {
@@ -2304,6 +2318,75 @@ html.js #seo-prerender {
   cursor: crosshair;
 }
 
+@container editor-main (max-width: 840px) {
+  .editor-topbar {
+    flex-wrap: nowrap;
+    align-items: stretch;
+    padding: 0.4rem 0.6rem;
+  }
+
+  .editor-topbar .selection-hint {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.5rem;
+  }
+
+  .selection-hint p {
+    font-size: 0.82rem;
+    line-height: 1.35;
+  }
+
+  .selection-hint .selection-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .selection-hint .selection-actions > button {
+    flex: 1 1 auto;
+  }
+
+  .toolbar-group {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    gap: 0.45rem;
+  }
+
+  .toolbar-field.field-text {
+    flex: 0 0 auto;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .toolbar-style-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-end;
+    gap: 0.55rem;
+    min-width: 0;
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    padding-bottom: 0.2rem;
+    padding-inline-end: 0.75rem;
+    scrollbar-width: thin;
+  }
+
+  .toolbar-style-row > .toolbar-field {
+    flex: 0 0 auto;
+  }
+
+  .field-font .mantine-Select-root,
+  .field-font .mantine-Input-wrapper {
+    flex: 0 0 11rem;
+    width: 11rem;
+    min-width: 11rem;
+  }
+}
+
 @media (max-width: 900px) {
   .app-header {
     flex-wrap: wrap;
@@ -2317,12 +2400,37 @@ html.js #seo-prerender {
 
   .editor-layout {
     grid-template-columns: 1fr;
-    grid-template-rows: minmax(9.5rem, 30vh) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
   }
 
   .editor-sidebar {
+    flex: 0 0 auto;
+    min-height: 0;
+    padding-bottom: 0.5rem;
+    overflow: visible;
     border-inline-end: 0;
     border-bottom: 1px solid var(--border);
+  }
+
+  .sidebar-header {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.35rem;
+    padding: 0.45rem 0.55rem;
+  }
+
+  .layers-panel {
+    flex: 0 0 auto;
+    overflow: visible;
+  }
+
+  .layers-list {
+    max-height: 9.5rem;
+  }
+
+  .sidebar-actions {
+    overflow: visible;
+    max-height: none;
   }
 
   .docs-page {
