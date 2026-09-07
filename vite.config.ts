@@ -163,7 +163,7 @@ const rootHrefFallback = (): Plugin => ({
   transformIndexHtml: {
     order: 'pre',
     handler(html) {
-      return html.replaceAll('href="/"', 'href="/index.html"')
+      return html.replaceAll('<a href="/">', '<a href="/index.html">')
     },
   },
 })
@@ -180,7 +180,10 @@ const omitPublicOnnx = (): Plugin => ({
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
-  const siteOrigin = (env.VITE_SITE_ORIGIN ?? '').replace(/\/+$/, '')
+  const siteOrigin = (env.VITE_SITE_ORIGIN || 'https://pngn.io').replace(
+    /\/+$/,
+    '',
+  )
 
   return {
     plugins: [
