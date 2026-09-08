@@ -234,6 +234,57 @@ describe('segmentGlyphs', () => {
     expect(segmentation.removalMask[localIndex(6, 6)]).toBe(0)
   })
 
+  it('absorbs a disconnected speck inside the box on a textured field', () => {
+    const width = 90
+    const height = 50
+    const pixels = new Uint8ClampedArray(width * height * 4)
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const target = (y * width + x) * 4
+        const orange = (x + y) % 2 === 0
+        pixels[target] = orange ? 255 : 20
+        pixels[target + 1] = orange ? 80 : 90
+        pixels[target + 2] = orange ? 20 : 255
+        pixels[target + 3] = 255
+      }
+    }
+    const paint = (
+      left: number,
+      top: number,
+      right: number,
+      bottom: number,
+    ) => {
+      for (let y = top; y < bottom; y += 1) {
+        for (let x = left; x < right; x += 1) {
+          const target = (y * width + x) * 4
+          pixels[target] = 12
+          pixels[target + 1] = 12
+          pixels[target + 2] = 12
+        }
+      }
+    }
+    paint(18, 16, 40, 34)
+    paint(58, 18, 64, 32)
+    const image = new ImageData(pixels, width, height)
+    const segmentation = segmentGlyphs(
+      image,
+      {
+        text: 'A i',
+        confidence: 0.95,
+        bounds: { x: 16, y: 14, width: 52, height: 22 },
+      },
+      { method: 'auto', maskThreshold: 34, maskDilation: 0 },
+    )
+    const localIndex = (globalX: number, globalY: number) =>
+      (globalY - segmentation.bounds.y) * segmentation.width +
+      globalX -
+      segmentation.bounds.x
+
+    expect(segmentation.model.ringSpread).toBeGreaterThanOrEqual(8)
+    expect(segmentation.removalMask[localIndex(24, 24)]).toBe(255)
+    expect(segmentation.removalMask[localIndex(60, 24)]).toBe(255)
+  })
+
   const paintHole = (
     image: ImageData,
     segmentation: ReturnType<typeof segmentGlyphs>,

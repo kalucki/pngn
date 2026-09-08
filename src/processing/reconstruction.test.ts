@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it, vi } from 'vitest'
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { revertLayerRemoval } from '../editor/revertLayerRemoval'
 import { neuralInpaint } from './inpaintClient'
 import { reconstructTextRegions } from './reconstruction'
@@ -129,6 +129,10 @@ const createTexturedRingFixture = () => {
 }
 
 describe('reconstructTextRegions', () => {
+  beforeEach(() => {
+    vi.mocked(neuralInpaint).mockClear()
+  })
+
   it('replaces contrasting text on a flat background', async () => {
     const original = createFixture()
     const result = await reconstructTextRegions(
@@ -341,5 +345,56 @@ describe('reconstructTextRegions', () => {
 
     expect(result.layers[0].processing.reconstructionMethod).toBe('lama')
     expect(neuralInpaint).toHaveBeenCalled()
+  })
+
+  it('inpaints neighboring words in one neural pass', async () => {
+    const original = createFixture()
+    await reconstructTextRegions(
+      original,
+      [
+        {
+          text: 'HELLO',
+          confidence: 0.99,
+          bounds: { x: 8, y: 8, width: 12, height: 8 },
+        },
+        {
+          text: 'WORLD',
+          confidence: 0.99,
+          bounds: { x: 22, y: 8, width: 12, height: 8 },
+        },
+      ],
+      { method: 'lama', maskThreshold: 34, maskDilation: 1 },
+    )
+    expect(neuralInpaint).toHaveBeenCalledTimes(1)
+  })
+
+  it('inpaints stacked lines separately', async () => {
+    const width = 80
+    const height = 80
+    const pixels = new Uint8ClampedArray(width * height * 4)
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+      pixels[offset] = 240
+      pixels[offset + 1] = 240
+      pixels[offset + 2] = 240
+      pixels[offset + 3] = 255
+    }
+    const original = new ImageData(pixels, width, height)
+    await reconstructTextRegions(
+      original,
+      [
+        {
+          text: 'ONE',
+          confidence: 0.99,
+          bounds: { x: 10, y: 8, width: 40, height: 12 },
+        },
+        {
+          text: 'TWO',
+          confidence: 0.99,
+          bounds: { x: 10, y: 50, width: 40, height: 12 },
+        },
+      ],
+      { method: 'lama', maskThreshold: 34, maskDilation: 1 },
+    )
+    expect(neuralInpaint).toHaveBeenCalledTimes(2)
   })
 })

@@ -4,6 +4,13 @@ import * as ort from 'onnxruntime-web/webgpu'
 import type { NeuralInpaintModel } from '../document/types'
 import { onnxObjectUrl } from '../cacheOnnx'
 import {
+  cropContentFromSquare,
+  letterboxLayout,
+  meanUnmaskedColor,
+  padImageToSquare,
+  padMaskToSquare,
+} from '../processing/letterbox'
+import {
   INPAINT_CACHE_NAME,
   INPAINT_MODEL_MIN_BYTES,
   inpaintModelRequestUrl,
@@ -207,9 +214,92 @@ const maskToImageData = (mask: Uint8Array, width: number, height: number) => {
   return new ImageData(pixels, width, height)
 }
 
+const fillCanvas = (
+  canvas: OffscreenCanvas,
+  color: [number, number, number],
+) => {
+  const context = getContext(canvas)
+  context.fillStyle = `rgb(${color[0]}, ${color[1]}, ${color[2]})`
+  context.fillRect(0, 0, canvas.width, canvas.height)
+}
+
+const letterboxToSize = (
+  image: ImageData,
+  mask: Uint8Array,
+  size: number,
+) => {
+  const layout = letterboxLayout(image.width, image.height, size)
+  const fill = meanUnmaskedColor(image, mask)
+  const imageCanvas = new OffscreenCanvas(size, size)
+  fillCanvas(imageCanvas, fill)
+  const source = new OffscreenCanvas(image.width, image.height)
+  getContext(source).putImageData(image, 0, 0)
+  const imageContext = getContext(imageCanvas)
+  imageContext.imageSmoothingEnabled = true
+  imageContext.imageSmoothingQuality = 'high'
+  imageContext.drawImage(
+    source,
+    layout.x,
+    layout.y,
+    layout.contentWidth,
+    layout.contentHeight,
+  )
+
+  const maskCanvas = new OffscreenCanvas(size, size)
+  fillCanvas(maskCanvas, [0, 0, 0])
+  const maskSource = new OffscreenCanvas(image.width, image.height)
+  getContext(maskSource).putImageData(
+    maskToImageData(mask, image.width, image.height),
+    0,
+    0,
+  )
+  const maskContext = getContext(maskCanvas)
+  maskContext.imageSmoothingEnabled = false
+  maskContext.drawImage(
+    maskSource,
+    layout.x,
+    layout.y,
+    layout.contentWidth,
+    layout.contentHeight,
+  )
+
+  return {
+    layout,
+    image: imageContext.getImageData(0, 0, size, size),
+    mask: maskContext.getImageData(0, 0, size, size),
+  }
+}
+
+const unletterbox = (
+  square: ImageData,
+  layout: ReturnType<typeof letterboxLayout>,
+  width: number,
+  height: number,
+) => {
+  const content = cropContentFromSquare(square, layout)
+  if (content.width === width && content.height === height) return content
+  return resizeRgba(content, width, height, true)
+}
+
 // ---- MI-GAN pipeline (full-resolution uint8 NCHW) ----------------------------
 
 const runPipelineUint8 = async (
+  loaded: LoadedSession,
+  crop: ImageData,
+  mask: Uint8Array,
+) => {
+  const fill = meanUnmaskedColor(crop, mask)
+  const padded = padImageToSquare(crop, fill)
+  const paddedMask = padMaskToSquare(mask, crop.width, crop.height)
+  const restored = await runPipelineNative(loaded, padded.image, paddedMask)
+  const content = cropContentFromSquare(restored, padded.layout)
+  if (content.width === crop.width && content.height === crop.height) {
+    return content
+  }
+  return resizeRgba(content, crop.width, crop.height, true)
+}
+
+const runPipelineNative = async (
   loaded: LoadedSession,
   crop: ImageData,
   mask: Uint8Array,
@@ -283,24 +373,18 @@ const runFixedFloat = async (
   mask: Uint8Array,
   size: number,
 ) => {
-  const resizedImage = resizeRgba(crop, size, size, true)
-  const resizedMask = resizeRgba(
-    maskToImageData(mask, crop.width, crop.height),
-    size,
-    size,
-    false,
-  )
+  const letterboxed = letterboxToSize(crop, mask, size)
   const plane = size * size
   const image = new Float32Array(plane * 3)
   for (let index = 0; index < plane; index += 1) {
     const source = index * 4
-    image[index] = resizedImage.data[source] / 255
-    image[plane + index] = resizedImage.data[source + 1] / 255
-    image[plane * 2 + index] = resizedImage.data[source + 2] / 255
+    image[index] = letterboxed.image.data[source] / 255
+    image[plane + index] = letterboxed.image.data[source + 1] / 255
+    image[plane * 2 + index] = letterboxed.image.data[source + 2] / 255
   }
   const maskTensor = new Float32Array(plane)
   for (let index = 0; index < plane; index += 1) {
-    maskTensor[index] = resizedMask.data[index * 4] > 127 ? 1 : 0
+    maskTensor[index] = letterboxed.mask.data[index * 4] > 127 ? 1 : 0
   }
   const feeds: Record<string, ort.Tensor> = {
     [loaded.imageInput]: new ort.Tensor('float32', image, [1, 3, size, size]),
@@ -310,10 +394,10 @@ const runFixedFloat = async (
   const composed = decodeFloatChw(
     results[loaded.output].data as Float32Array,
     size,
-    resizedImage,
-    resizedMask,
+    letterboxed.image,
+    letterboxed.mask,
   )
-  const full = resizeRgba(composed, crop.width, crop.height, true)
+  const full = unletterbox(composed, letterboxed.layout, crop.width, crop.height)
   const pixels = new Uint8ClampedArray(full.data)
   for (let index = 0; index < crop.width * crop.height; index += 1) {
     pixels[index * 4 + 3] = crop.data[index * 4 + 3]

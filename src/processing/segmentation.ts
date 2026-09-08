@@ -193,16 +193,20 @@ const chebyshevToRect = (x: number, y: number, bounds: Bounds) => {
   return Math.max(dx, dy);
 };
 
+export const COMPLEX_RING_SPREAD = 8;
+
 const localRingBand = (textHeight: number) =>
   Math.max(4, Math.min(16, Math.round(textHeight * 0.1)));
 
 // Same gates Auto uses to pick a flat or gradient fill. A slow color wash
 // across a wide headline is not a photo, so the OCR box itself should be the
-// hole instead of a residual mask that dies out on one side.
+// hole instead of a residual mask that dies out on one side. Grain in the
+// local ring means this is a photo, not a wash: keep a residual mask.
 const isGentleField = (model: BackgroundModel) =>
-  model.localVariance < 105 ||
-  (model.variance < 105 && model.fitError < 95) ||
-  (model.fitError < 185 && model.edgeDensity < 0.09);
+  model.ringSpread < COMPLEX_RING_SPREAD &&
+  (model.localVariance < 105 ||
+    (model.variance < 105 && model.fitError < 95) ||
+    (model.fitError < 185 && model.edgeDensity < 0.09));
 
 const fitBackgroundModel = (
   image: ImageData,
@@ -473,6 +477,32 @@ const growEffects = (
   return grown;
 };
 
+const countMask = (mask: Uint8Array) => {
+  let count = 0;
+  for (let index = 0; index < mask.length; index += 1) {
+    if (mask[index]) count += 1;
+  }
+  return count;
+};
+
+const estimateStrokeRadius = (
+  core: Uint8Array,
+  width: number,
+  height: number,
+) => {
+  const corePixels = countMask(core);
+  if (corePixels < 8) return 0;
+  let current = core;
+  let radius = 0;
+  while (radius < 8) {
+    const next = morph(current, width, height, 1, "erode");
+    if (countMask(next) < corePixels * 0.15) break;
+    current = next;
+    radius += 1;
+  }
+  return radius;
+};
+
 const textColorFromMask = (
   image: ImageData,
   bounds: Bounds,
@@ -672,7 +702,15 @@ export const segmentGlyphs = (
     weakThreshold,
     maxEffectDistance,
   );
-  const automaticExpansion = detection.bounds.height >= 28 ? 1 : 0;
+  const strokeDilate = clamp(
+    Math.round(estimateStrokeRadius(core, bounds.width, bounds.height) * 0.35),
+    0,
+    4,
+  );
+  const automaticExpansion = Math.max(
+    detection.bounds.height >= 28 ? 1 : 0,
+    strokeDilate,
+  );
   const removalMask = morph(
     effects,
     bounds.width,
@@ -711,6 +749,17 @@ export const segmentGlyphs = (
         }
       }
     }
+  }
+  const leftover = leftoverInkMask(image, {
+    detection,
+    bounds,
+    width: bounds.width,
+    height: bounds.height,
+    removalMask,
+    model,
+  });
+  for (let index = 0; index < size; index += 1) {
+    if (leftover[index]) removalMask[index] = 255;
   }
   const effectMask = new Uint8Array(size);
   const softMask = new Uint8ClampedArray(size);
@@ -755,12 +804,6 @@ export const segmentGlyphs = (
   };
 };
 
-const medianChannel = (values: number[]) => {
-  if (!values.length) return 0;
-  const ranked = [...values].sort((left, right) => left - right);
-  return ranked[Math.floor((ranked.length - 1) / 2)];
-};
-
 const sampleColor = (
   image: ImageData,
   x: number,
@@ -768,6 +811,48 @@ const sampleColor = (
 ): [number, number, number] => {
   const source = offset(x, y, image.width);
   return [image.data[source], image.data[source + 1], image.data[source + 2]];
+};
+
+export const leftoverInkMask = (
+  image: ImageData,
+  segmentation: Pick<
+    GlyphSegmentation,
+    "bounds" | "width" | "height" | "removalMask" | "detection" | "model"
+  >,
+) => {
+  const { bounds, width, height, removalMask, detection, model } = segmentation;
+  const extra = new Uint8Array(width * height);
+  const inkFloor = Math.max(COMPLEX_RING_SPREAD, model.ringSpread * 2.2);
+  const boxPad = 2;
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const local = y * width + x;
+      if (removalMask[local]) continue;
+      const globalX = bounds.x + x;
+      const globalY = bounds.y + y;
+      if (!insideExpandedRect(globalX, globalY, detection.bounds, boxPad)) {
+        continue;
+      }
+      const observed = sampleColor(image, globalX, globalY);
+      const residual = labDistance(
+        observed,
+        predictBackground(model, globalX, globalY),
+      );
+      if (
+        residual >= inkFloor &&
+        labDistance(observed, model.ringMedian) >= inkFloor
+      ) {
+        extra[local] = 255;
+      }
+    }
+  }
+  return morph(extra, width, height, 1, "dilate");
+};
+
+const medianChannel = (values: number[]) => {
+  if (!values.length) return 0;
+  const ranked = [...values].sort((left, right) => left - right);
+  return ranked[Math.floor((ranked.length - 1) / 2)];
 };
 
 // After a flat/gradient fill, compare the hole to the original ring around the
@@ -804,7 +889,7 @@ export const analyticalFillDisagreesWithRing = (
   const holeToRing = labDistance(holeMedian, ringMedian);
 
   // Checker/photo rings cannot be reconstructed by a single color or plane.
-  if (ringSpread >= 14) return true;
+  if (ringSpread >= COMPLEX_RING_SPREAD) return true;
   return (
     holeToRing > Math.max(7, ringSpread * 2.2) ||
     holeMean > Math.max(7, ringSpread * 2.2)

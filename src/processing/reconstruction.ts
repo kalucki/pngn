@@ -10,10 +10,13 @@ import { neuralInpaint } from './inpaintClient'
 import { defaultOcrFontSize } from '../fonts/ocrDefaults'
 import {
   analyticalFillDisagreesWithRing,
+  COMPLEX_RING_SPREAD,
+  leftoverInkMask,
   predictBackground,
   segmentGlyphs,
   type GlyphSegmentation,
 } from './segmentation'
+import { groupLineIndices } from './inpaintGroups'
 
 const COMPLEX_BACKGROUND_ENGINE: NeuralInpaintModel = 'lama'
 
@@ -45,6 +48,7 @@ const chooseMethod = (
 ): ResolvedReconstructionMethod => {
   if (requested !== 'auto') return requested
   const { model } = segmentation
+  if (model.ringSpread >= COMPLEX_RING_SPREAD) return COMPLEX_BACKGROUND_ENGINE
   // A thin ring around the glyph wins over the padded window: nearby artwork
   // must not force a neural pass when the letters themselves sit on a flat field.
   if (model.localVariance < 105) return 'flat'
@@ -83,31 +87,46 @@ const extractCrop = (image: ImageData, segmentation: GlyphSegmentation) =>
 // A generous padded crop around the glyph bounds. Neural inpainters (and, to a
 // lesser degree, the classical ones) reconstruct far better when they can see
 // plenty of intact background context surrounding the hole.
-const extractContext = (
+const extractGroupContext = (
   image: ImageData,
-  segmentation: GlyphSegmentation,
+  group: GlyphSegmentation[],
 ): CropRegion => {
-  const { bounds } = segmentation
-  const padding = clamp(
-    Math.round(segmentation.detection.bounds.height * 1.25),
-    24,
-    192,
+  const padding = Math.max(
+    ...group.map((segmentation) =>
+      clamp(Math.round(segmentation.detection.bounds.height * 1.25), 24, 192),
+    ),
   )
-  const x = clamp(bounds.x - padding, 0, image.width - 1)
-  const y = clamp(bounds.y - padding, 0, image.height - 1)
-  const right = clamp(bounds.x + bounds.width + padding, x + 1, image.width)
-  const bottom = clamp(bounds.y + bounds.height + padding, y + 1, image.height)
-  const contextBounds = { x, y, width: right - x, height: bottom - y }
+  let left = image.width
+  let top = image.height
+  let right = 0
+  let bottom = 0
+  for (const segmentation of group) {
+    const { bounds } = segmentation
+    left = Math.min(left, bounds.x)
+    top = Math.min(top, bounds.y)
+    right = Math.max(right, bounds.x + bounds.width)
+    bottom = Math.max(bottom, bounds.y + bounds.height)
+  }
+  const x = clamp(left - padding, 0, image.width - 1)
+  const y = clamp(top - padding, 0, image.height - 1)
+  const contextBounds = {
+    x,
+    y,
+    width: clamp(right + padding, x + 1, image.width) - x,
+    height: clamp(bottom + padding, y + 1, image.height) - y,
+  }
   const crop = extractRegion(image, contextBounds)
-
   const mask = new Uint8Array(contextBounds.width * contextBounds.height)
-  const dx = bounds.x - contextBounds.x
-  const dy = bounds.y - contextBounds.y
-  for (let localY = 0; localY < bounds.height; localY += 1) {
-    for (let localX = 0; localX < bounds.width; localX += 1) {
-      if (!segmentation.removalMask[localY * bounds.width + localX]) continue
-      const target = (localY + dy) * contextBounds.width + (localX + dx)
-      mask[target] = 255
+  for (const segmentation of group) {
+    const dx = segmentation.bounds.x - contextBounds.x
+    const dy = segmentation.bounds.y - contextBounds.y
+    for (let localY = 0; localY < segmentation.height; localY += 1) {
+      for (let localX = 0; localX < segmentation.width; localX += 1) {
+        if (!segmentation.removalMask[localY * segmentation.width + localX]) {
+          continue
+        }
+        mask[(localY + dy) * contextBounds.width + (localX + dx)] = 255
+      }
     }
   }
   return { bounds: contextBounds, crop, mask }
@@ -234,7 +253,9 @@ const featherAlpha = (
       continue
     }
     const value = distance[index] < 0 ? span : distance[index]
-    alpha[index] = clamp(value / span, 0, 1)
+    // Keep the hole mostly inpaint even at the boundary so thin glyphs do not
+    // ghost through a 1-3px inner-distance ramp.
+    alpha[index] = clamp(Math.max(value / span, 0.75), 0, 1)
   }
   return alpha
 }
@@ -300,6 +321,7 @@ const backgroundTypeFor = (
   segmentation: GlyphSegmentation,
 ): TextLayer['processing']['backgroundType'] => {
   const { model } = segmentation
+  if (model.ringSpread >= COMPLEX_RING_SPREAD) return 'complex'
   if (model.localVariance < 105) return 'flat'
   if (model.variance < 105 && model.fitError < 95) return 'flat'
   if (model.fitError < 185 && model.edgeDensity < 0.09) return 'gradient'
@@ -354,6 +376,84 @@ const createLayer = (
 const featherRadius = (segmentation: GlyphSegmentation) =>
   clamp(Math.round(segmentation.detection.bounds.height * 0.06), 1, 3)
 
+const absorbLeftoverInk = (
+  image: ImageData,
+  group: GlyphSegmentation[],
+) => {
+  let added = 0
+  for (const segmentation of group) {
+    const extra = leftoverInkMask(image, segmentation)
+    for (let index = 0; index < extra.length; index += 1) {
+      if (!extra[index] || segmentation.removalMask[index]) continue
+      segmentation.removalMask[index] = 255
+      added += 1
+    }
+  }
+  return added
+}
+
+const writeGlobalMask = (
+  globalMask: Uint8Array,
+  imageWidth: number,
+  group: GlyphSegmentation[],
+) => {
+  for (const segmentation of group) {
+    for (let y = 0; y < segmentation.height; y += 1) {
+      for (let x = 0; x < segmentation.width; x += 1) {
+        if (!segmentation.removalMask[y * segmentation.width + x]) continue
+        const globalX = segmentation.bounds.x + x
+        const globalY = segmentation.bounds.y + y
+        globalMask[globalY * imageWidth + globalX] = 255
+      }
+    }
+  }
+}
+
+const paintNeuralGroup = async (
+  clean: ImageData,
+  group: GlyphSegmentation[],
+  method: NeuralInpaintModel,
+) => {
+  const radius = clamp(
+    Math.round(
+      Math.max(
+        ...group.map((segmentation) => segmentation.detection.bounds.height),
+      ) * 0.12,
+    ),
+    2,
+    12,
+  )
+  const feather = Math.max(...group.map(featherRadius))
+  const context = extractGroupContext(clean, group)
+  let restored: ImageData
+  let provider: 'webgpu' | 'wasm' | null = null
+  let usedModel: NeuralInpaintModel | null = method
+  try {
+    const result = await neuralInpaint(
+      context.crop,
+      context.mask,
+      method,
+    )
+    restored = result.image
+    provider = result.provider
+  } catch (error) {
+    console.warn(
+      `Neural inpaint (${method}) failed; falling back to Telea.`,
+      error,
+    )
+    restored = await inpaint(context.crop, context.mask, 'telea', radius)
+    usedModel = null
+  }
+  const alpha = featherAlpha(
+    context.mask,
+    context.bounds.width,
+    context.bounds.height,
+    feather,
+  )
+  compositeFeathered(clean, restored, context.bounds, context.mask, alpha)
+  return { model: usedModel, provider }
+}
+
 export const reconstructTextRegions = async (
   original: ImageData,
   detections: DetectedText[],
@@ -374,21 +474,11 @@ export const reconstructTextRegions = async (
     chooseMethod(options.method, segmentation),
   )
 
-  for (const segmentation of segmentations) {
-    for (let y = 0; y < segmentation.height; y += 1) {
-      for (let x = 0; x < segmentation.width; x += 1) {
-        if (!segmentation.removalMask[y * segmentation.width + x]) continue
-        const globalX = segmentation.bounds.x + x
-        const globalY = segmentation.bounds.y + y
-        globalMask[globalY * original.width + globalX] = 255
-      }
-    }
-  }
-
   let inpaintModel: NeuralInpaintModel | null = null
   let inpaintProvider: 'webgpu' | 'wasm' | null = null
 
   const inpaintStartedAt = performance.now()
+  const pendingNeural: number[] = []
   for (let index = 0; index < segmentations.length; index += 1) {
     const segmentation = segmentations[index]
     let method = methods[index]
@@ -406,42 +496,16 @@ export const reconstructTextRegions = async (
       }
     }
 
+    if (NEURAL_METHODS.has(method)) {
+      pendingNeural.push(index)
+      continue
+    }
+
     const radius = clamp(
       Math.round(segmentation.detection.bounds.height * 0.12),
       2,
       12,
     )
-    const feather = featherRadius(segmentation)
-
-    if (NEURAL_METHODS.has(method)) {
-      const context = extractContext(clean, segmentation)
-      let restored: ImageData
-      try {
-        const result = await neuralInpaint(
-          context.crop,
-          context.mask,
-          method as NeuralInpaintModel,
-        )
-        restored = result.image
-        inpaintModel = method as NeuralInpaintModel
-        inpaintProvider = result.provider
-      } catch (error) {
-        console.warn(
-          `Neural inpaint (${method}) failed; falling back to Telea.`,
-          error,
-        )
-        restored = await inpaint(context.crop, context.mask, 'telea', radius)
-      }
-      const alpha = featherAlpha(
-        context.mask,
-        context.bounds.width,
-        context.bounds.height,
-        feather,
-      )
-      compositeFeathered(clean, restored, context.bounds, context.mask, alpha)
-      continue
-    }
-
     const crop = extractCrop(clean, segmentation)
     const restored = await inpaint(
       crop,
@@ -453,7 +517,7 @@ export const reconstructTextRegions = async (
       segmentation.removalMask,
       segmentation.width,
       segmentation.height,
-      feather,
+      featherRadius(segmentation),
     )
     compositeFeathered(
       clean,
@@ -463,6 +527,25 @@ export const reconstructTextRegions = async (
       alpha,
     )
   }
+
+  const neuralGroups = groupLineIndices(
+    pendingNeural.map((index) => segmentations[index].detection.bounds),
+  )
+  for (const localGroup of neuralGroups) {
+    const indices = localGroup.map((local) => pendingNeural[local])
+    const group = indices.map((index) => segmentations[index])
+    absorbLeftoverInk(original, group)
+    const method = methods[indices[0]] as NeuralInpaintModel
+    const first = await paintNeuralGroup(clean, group, method)
+    if (first.model) inpaintModel = first.model
+    if (first.provider) inpaintProvider = first.provider
+    if (absorbLeftoverInk(original, group) >= 6) {
+      const second = await paintNeuralGroup(clean, group, method)
+      if (second.model) inpaintModel = second.model
+      if (second.provider) inpaintProvider = second.provider
+    }
+  }
+  writeGlobalMask(globalMask, original.width, segmentations)
   const inpaintMs = performance.now() - inpaintStartedAt
 
   const maskPixels = new Uint8ClampedArray(original.width * original.height * 4)
