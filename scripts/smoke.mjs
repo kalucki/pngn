@@ -71,7 +71,7 @@ try {
     const error = await page.locator('.status-card.error').textContent()
     throw new Error(error ?? 'Editor did not become ready')
   }
-  await page.getByRole('button', { name: 'Add another text area' }).click()
+  await page.getByRole('button', { name: 'Select another area' }).click()
   await page.locator('.editor-canvas.selecting-region').waitFor()
   await page.getByRole('combobox', { name: 'Background fill' }).click()
   await page.getByRole('option', { name: /MI-GAN/ }).click()
@@ -90,7 +90,7 @@ try {
     { steps: 8 },
   )
   await page.mouse.up()
-  await page.getByRole('button', { name: 'Process new area' }).click()
+  await page.getByRole('button', { name: 'Edit selected text' }).click()
   const textLayer = page.locator('.layers-list .layer-item')
   await textLayer.nth(1).waitFor({ timeout: 120_000 })
 

@@ -55,7 +55,6 @@ export const en = {
   "app.maskExpansionHintAria": "When to change eraser margin",
   "app.maskExpansionHint":
     "Extra wipe around each letter, in pixels. Raise if a halo remains, especially on large or serif type.",
-  "app.processNewArea": "Process new area",
   "app.applySettingsHint": "Click the text layer to apply, or wait a moment.",
   "app.selectLayerToApply": "Select a text layer to apply.",
   "app.doneEditing": "Done editing?",
@@ -238,7 +237,6 @@ const es = catalog({
   "app.maskExpansionHintAria": "Cuándo cambiar el margen del borrador",
   "app.maskExpansionHint":
     "Borrado extra alrededor de cada letra, en píxeles. Súbelo si queda un halo, sobre todo en letras grandes o con serifa.",
-  "app.processNewArea": "Procesar nueva área",
   "app.applySettingsHint":
     "Haz clic en la capa para aplicar, o espera un momento.",
   "app.selectLayerToApply": "Selecciona una capa de texto para aplicar.",
@@ -420,7 +418,6 @@ const pl = catalog({
   "app.maskExpansionHintAria": "Kiedy zmienić margines gumki",
   "app.maskExpansionHint":
     "Dodatkowe wymazanie wokół każdej litery, w pikselach. Podnieś, jeśli zostaje otoczka, zwłaszcza przy dużym piśmie szeryfowym.",
-  "app.processNewArea": "Przetwórz nowy obszar",
   "app.applySettingsHint":
     "Kliknij warstwę, aby zastosować, albo poczekaj chwilę.",
   "app.selectLayerToApply": "Wybierz warstwę tekstu, aby zastosować.",
@@ -594,7 +591,6 @@ const zh = catalog({
   "app.maskExpansion": "橡皮擦边距",
   "app.maskExpansionHintAria": "何时调整橡皮擦边距",
   "app.maskExpansionHint": "在每个字母周围多擦一些（像素）。若留下光晕就调高，大字或衬线体尤其如此。",
-  "app.processNewArea": "处理新区域",
   "app.applySettingsHint": "点击图层以应用，或稍等片刻。",
   "app.selectLayerToApply": "选择一个文字图层以应用。",
   "app.doneEditing": "编辑完成？",
@@ -769,7 +765,6 @@ const pcm = catalog({
   "app.maskExpansionHintAria": "When to change eraser margin",
   "app.maskExpansionHint":
     "Extra wipe around each letter, for pixels. Increase am if halo still dey, especially big or serif letters.",
-  "app.processNewArea": "Process new area",
   "app.applySettingsHint": "Click the writing layer to apply, or wait small.",
   "app.selectLayerToApply": "Select one writing layer to apply.",
   "app.doneEditing": "You don finish edit?",
@@ -946,7 +941,6 @@ const ar = catalog({
   "app.maskExpansionHintAria": "متى تغيّر هامش الممحاة",
   "app.maskExpansionHint":
     "مسح إضافي حول كل حرف بالبكسل. ارفعه إن بقيت هالة، خاصة مع الحروف الكبيرة أو ذات التذييلات.",
-  "app.processNewArea": "معالجة منطقة جديدة",
   "app.applySettingsHint": "انقر على الطبقة للتطبيق، أو انتظر لحظة.",
   "app.selectLayerToApply": "حدد طبقة نص للتطبيق.",
   "app.doneEditing": "أنهيت التعديل؟",

@@ -4,11 +4,15 @@ import {
   clientPointToImage,
   containedRect,
   fittedContainSize,
+  fontSizeFromCornerDrag,
+  isOnResizeCorner,
   isOnRotateEdge,
   layerOutlinePadding,
   normalizeBounds,
   overlayRectInViewport,
   pointInRotatedBounds,
+  resizeCursorForCorner,
+  resizeHandleSize,
   rotateEdgeWidth,
   rotationFromDrag,
   toLocalBoundsPoint,
@@ -162,5 +166,50 @@ describe('rotated text box geometry', () => {
         y: center.y + 40,
       }, 0),
     ).toBeCloseTo(90)
+  })
+})
+
+describe('corner font-size handles', () => {
+  const bounds = { x: 10, y: 20, width: 100, height: 40 }
+  const seHandle = { x: 100, y: 40 }
+
+  it('hits the padded outline corners', () => {
+    expect(isOnResizeCorner({ x: -16, y: -16 }, bounds, 14, 16)).toBe('nw')
+    expect(isOnResizeCorner({ x: 116, y: 56 }, bounds, 14, 16)).toBe('se')
+    expect(isOnResizeCorner({ x: 50, y: 20 }, bounds, 14, 16)).toBe(null)
+  })
+
+  it('wins over the rotate strip at the right-hand corners', () => {
+    const se = { x: 116, y: 56 }
+    expect(isOnRotateEdge(se, bounds, 14, 16)).toBe(true)
+    expect(isOnResizeCorner(se, bounds, 14, 16)).toBe('se')
+  })
+
+  it('scales font size from the opposite corner like a size input', () => {
+    expect(fontSizeFromCornerDrag(24, bounds, 'se', seHandle, 0)).toBeCloseTo(24)
+    expect(
+      fontSizeFromCornerDrag(24, bounds, 'se', { x: 200, y: 80 }, 0),
+    ).toBeCloseTo(48)
+    expect(
+      fontSizeFromCornerDrag(24, bounds, 'nw', { x: 50, y: 20 }, 0),
+    ).toBeCloseTo(12)
+  })
+
+  it('clamps to the toolbar size range', () => {
+    expect(
+      fontSizeFromCornerDrag(24, bounds, 'se', { x: 10_000, y: 4_000 }, 0),
+    ).toBe(600)
+    expect(fontSizeFromCornerDrag(24, bounds, 'se', { x: 0, y: 0 }, 0)).toBe(4)
+  })
+
+  it('keeps resize handles visible in screen pixels on large images', () => {
+    expect(resizeHandleSize(3000, 800)).toBeCloseTo(10 * (3000 / 800))
+  })
+
+  it('picks a resize cursor that follows rotation by 90 degrees', () => {
+    expect(resizeCursorForCorner('se', 0)).toBe('nwse-resize')
+    expect(resizeCursorForCorner('se', 90)).toBe('nesw-resize')
+    expect(resizeCursorForCorner('ne', 0)).toBe('nesw-resize')
+    expect(resizeCursorForCorner('ne', 90)).toBe('nwse-resize')
   })
 })

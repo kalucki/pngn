@@ -236,7 +236,7 @@ export const PipetteIcon = ({ size = 16 }: IconProps) => (
   </svg>
 )
 
-export const LightbulbIcon = ({ size = 16 }: IconProps) => (
+export const DashedBoxIcon = ({ size = 16 }: IconProps) => (
   <svg
     width={size}
     height={size}
@@ -248,9 +248,7 @@ export const LightbulbIcon = ({ size = 16 }: IconProps) => (
     strokeLinejoin="round"
     aria-hidden="true"
   >
-    <path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5" />
-    <path d="M9 18h6" />
-    <path d="M10 22h4" />
+    <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="5 3.5" />
   </svg>
 )
 

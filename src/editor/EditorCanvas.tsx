@@ -2,15 +2,22 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { Bounds, Point, TextLayer } from '../document/types'
 import {
   boundsCenter,
+  cappedResizeHandleSize,
   containedRect,
   fittedContainSize,
+  fontSizeFromCornerDrag,
+  isOnResizeCorner,
   isOnRotateEdge,
   layerOutlinePadding,
   normalizeBounds,
+  outlineCorners,
   pointerToImagePoint,
+  resizeCursorForCorner,
+  resizeHandleSize,
   rotateEdgeWidth,
   rotationFromDrag,
   toLocalBoundsPoint,
+  type ResizeCorner,
 } from './imageGeometry'
 import { drawLayerText, layerStrokeOutset } from './drawTextLayer'
 import { ensureFontsForLayers, withSettledFonts } from './fonts'
@@ -37,6 +44,7 @@ type EditorCanvasProps = {
   onActivateLayer?: (id: string) => void
   onMoveLayer: (id: string, x: number, y: number) => void
   onRotateLayer: (id: string, rotation: number) => void
+  onFontSizeLayer: (id: string, fontSize: number) => void
   onRegionSelectionChange?: (selection: Bounds | null) => void
 }
 
@@ -54,10 +62,20 @@ type DragState =
       startPoint: Point
       center: Point
     }
+  | {
+      type: 'scale'
+      id: string
+      corner: ResizeCorner
+      startFontSize: number
+      startBounds: Bounds
+      startRotation: number
+      padding: number
+    }
 
 type LayerHit = {
   layer: TextLayer
-  action: 'move' | 'rotate'
+  action: 'move' | 'rotate' | 'scale'
+  corner?: ResizeCorner
 }
 
 type ClickCandidate = {
@@ -104,6 +122,7 @@ export const EditorCanvas = ({
   onActivateLayer,
   onMoveLayer,
   onRotateLayer,
+  onFontSizeLayer,
   onRegionSelectionChange,
 }: EditorCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -121,16 +140,28 @@ export const EditorCanvas = ({
   const transformRef = useRef(transform)
   const settledLayersRef = useRef(layers)
 
+  const outlineMetrics = (layer: TextLayer, displayWidth: number) => {
+    const pad =
+      layerOutlinePadding(layer.typography.fontSize, width, displayWidth) +
+      layerStrokeOutset(layer)
+    const handleSize = cappedResizeHandleSize(
+      resizeHandleSize(width, displayWidth),
+      layer.bounds,
+      pad,
+    )
+    return { pad, handleSize }
+  }
+
   const hitAtPoint = (canvas: HTMLCanvasElement, point: Point): LayerHit | null => {
     const displayWidth = displayedImageWidth(canvas, width, height)
     for (const layer of [...layers].reverse()) {
       const local = toLocalBoundsPoint(point, layer.bounds, layer.rotation)
-      const pad =
-        layerOutlinePadding(
-          layer.typography.fontSize,
-          width,
-          displayWidth,
-        ) + layerStrokeOutset(layer)
+      const { pad, handleSize } = outlineMetrics(layer, displayWidth)
+      const selected = layer.id === selectedLayerId
+      if (selected) {
+        const corner = isOnResizeCorner(local, layer.bounds, handleSize, pad)
+        if (corner) return { layer, action: 'scale', corner }
+      }
       const edgeWidth = rotateEdgeWidth(width, displayWidth)
       if (isOnRotateEdge(local, layer.bounds, edgeWidth, pad)) {
         return { layer, action: 'rotate' }
@@ -243,19 +274,43 @@ export const EditorCanvas = ({
         )
         context.strokeRect(-pad, -pad, outlineWidth, outlineHeight)
         if (selected) {
+          const handleSize = cappedResizeHandleSize(
+            resizeHandleSize(width, displayWidth),
+            bounds,
+            pad,
+          )
+          const rotateTop = -pad + handleSize
+          const rotateHeight = Math.max(0, outlineHeight - handleSize * 2)
           context.fillStyle = 'rgba(16, 152, 247, 0.28)'
           context.fillRect(
             bounds.width + pad - edgeWidth,
-            -pad,
+            rotateTop,
             edgeWidth,
-            outlineHeight,
+            rotateHeight,
           )
           context.setLineDash([])
           context.lineWidth = Math.max(3, width / 700)
           context.beginPath()
-          context.moveTo(bounds.width + pad, -pad)
-          context.lineTo(bounds.width + pad, bounds.height + pad)
+          context.moveTo(bounds.width + pad, rotateTop)
+          context.lineTo(bounds.width + pad, rotateTop + rotateHeight)
           context.stroke()
+          context.fillStyle = '#1098F7'
+          context.strokeStyle = '#ffffff'
+          context.lineWidth = Math.max(1.5, width / 1100)
+          for (const corner of Object.values(outlineCorners(bounds, pad))) {
+            context.fillRect(
+              corner.x - handleSize / 2,
+              corner.y - handleSize / 2,
+              handleSize,
+              handleSize,
+            )
+            context.strokeRect(
+              corner.x - handleSize / 2,
+              corner.y - handleSize / 2,
+              handleSize,
+              handleSize,
+            )
+          }
         }
         context.restore()
       }
@@ -429,6 +484,14 @@ export const EditorCanvas = ({
       canvas.style.cursor = ROTATE_CURSOR
       return
     }
+    if (drag?.type === 'scale') {
+      const layer = layers.find((item) => item.id === drag.id)
+      canvas.style.cursor = resizeCursorForCorner(
+        drag.corner,
+        layer?.rotation ?? 0,
+      )
+      return
+    }
     if (drag?.type === 'move') {
       canvas.style.cursor = 'grabbing'
       return
@@ -436,6 +499,10 @@ export const EditorCanvas = ({
     const hit = hitAtPoint(canvas, point)
     if (hit?.action === 'rotate') {
       canvas.style.cursor = ROTATE_CURSOR
+      return
+    }
+    if (hit?.action === 'scale' && hit.corner) {
+      canvas.style.cursor = resizeCursorForCorner(hit.corner, hit.layer.rotation)
       return
     }
     canvas.style.cursor = hit ? 'grab' : 'default'
@@ -462,6 +529,22 @@ export const EditorCanvas = ({
         startPoint: point,
         center: boundsCenter(hit.layer.bounds),
       }
+    } else if (hit.action === 'scale' && hit.corner) {
+      const displayWidth = displayedImageWidth(
+        event.currentTarget,
+        width,
+        height,
+      )
+      const { pad } = outlineMetrics(hit.layer, displayWidth)
+      dragRef.current = {
+        type: 'scale',
+        id: hit.layer.id,
+        corner: hit.corner,
+        startFontSize: hit.layer.typography.fontSize,
+        startBounds: hit.layer.bounds,
+        startRotation: hit.layer.rotation,
+        padding: pad,
+      }
     } else {
       clickCandidateRef.current = {
         id: hit.layer.id,
@@ -481,7 +564,10 @@ export const EditorCanvas = ({
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current
-    const point = imagePoint(event, drag?.type !== 'rotate')
+    const point = imagePoint(
+      event,
+      drag?.type !== 'rotate' && drag?.type !== 'scale',
+    )
     const clickCandidate = clickCandidateRef.current
     if (clickCandidate) {
       const dx = event.clientX - clickCandidate.clientX
@@ -510,6 +596,20 @@ export const EditorCanvas = ({
         layer.id,
         rotationFromDrag(drag.center, drag.startPoint, point, drag.startRotation),
       )
+      return
+    }
+    if (drag.type === 'scale') {
+      const local = toLocalBoundsPoint(point, drag.startBounds, drag.startRotation)
+      const fontSize = fontSizeFromCornerDrag(
+        drag.startFontSize,
+        drag.startBounds,
+        drag.corner,
+        local,
+        drag.padding,
+      )
+      if (fontSize !== layer.typography.fontSize) {
+        onFontSizeLayer(layer.id, fontSize)
+      }
       return
     }
     onMoveLayer(

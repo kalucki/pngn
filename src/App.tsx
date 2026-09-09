@@ -25,7 +25,7 @@ import {
   matchTextLayerFonts,
   mergeMatchedFontLayer,
 } from "./fonts/matchTextLayerFont";
-import { isMonospaceFont } from "./editor/fonts";
+import { withFontSize, withTextSizeBounds } from "./editor/textLayerBounds";
 import {
   adoptRegionLayers,
   findRegionByLayerId,
@@ -51,11 +51,10 @@ import {
   EyeIcon,
   HelpCircleIcon,
   ImagePlusIcon,
-  LightbulbIcon,
+  DashedBoxIcon,
   PencilIcon,
   PlusIcon,
   RestartIcon,
-  XIcon,
 } from "./layout/icons";
 import { EXPORT_PATH, navigate } from "./navigation";
 import { processImage, warmupProcessingWorker } from "./processing/client";
@@ -255,6 +254,10 @@ export const App = () => {
   const hasValidSelection = Boolean(
     selection && selection.width >= 4 && selection.height >= 4,
   );
+  const showDragHint =
+    (!result || !urls || isAddingRegion) &&
+    !hasValidSelection &&
+    !isProcessing;
   const documentKey =
     file && source ? editorDocumentKey(file, source.width, source.height) : "";
   const isBusy = isProcessing || isExporting;
@@ -552,32 +555,17 @@ export const App = () => {
 
   const updateLayer = (nextLayer: TextLayer) => {
     setLayers((current) =>
-      current.map((layer) => {
-        if (layer.id !== nextLayer.id) return layer;
-        const longestLine = nextLayer.text
-          .split("\n")
-          .reduce(
-            (longest, line) => (line.length > longest.length ? line : longest),
-            "",
-          );
-        const estimatedWidth =
-          longestLine.length *
-          nextLayer.typography.fontSize *
-          (isMonospaceFont(nextLayer.typography.fontFamily) ? 0.62 : 0.56);
-        return {
-          ...nextLayer,
-          bounds: {
-            ...nextLayer.bounds,
-            width: Math.max(nextLayer.bounds.width, estimatedWidth),
-            height: Math.max(
-              nextLayer.bounds.height,
-              nextLayer.text.split("\n").length *
-                nextLayer.typography.fontSize *
-                nextLayer.typography.lineHeight,
-            ),
-          },
-        };
-      }),
+      current.map((layer) =>
+        layer.id === nextLayer.id ? withTextSizeBounds(nextLayer) : layer,
+      ),
+    );
+  };
+
+  const setLayerFontSize = (id: string, fontSize: number) => {
+    setLayers((current) =>
+      current.map((layer) =>
+        layer.id === id ? withFontSize(layer, fontSize) : layer,
+      ),
     );
   };
 
@@ -1024,87 +1012,67 @@ export const App = () => {
               onRemoveLayer={removeLayer}
             />
             <div className="sidebar-actions">
-              {urls && result ? (
+              {urls && result && !isAddingRegion ? (
                 <button
                   type="button"
-                  className={`button-with-icon${isAddingRegion ? " secondary-button" : ""}`}
+                  className="button-with-icon"
                   disabled={isProcessing}
                   onClick={() => {
-                    setIsAddingRegion((current) => !current);
+                    setIsAddingRegion(true);
                     setSelection(null);
                     setSelectedLayerId(null);
                     setIsExportPreview(false);
                   }}
                 >
-                  {isAddingRegion ? null : <PlusIcon />}
-                  {isAddingRegion ? t("app.cancel") : t("app.selectAnother")}
+                  <PlusIcon />
+                  {t("app.selectAnother")}
                 </button>
-              ) : null}
-              {isAddingRegion ? (
-                <button
-                  type="button"
-                  disabled={
-                    !file ||
-                    !selection ||
-                    selection.width < 4 ||
-                    selection.height < 4 ||
-                    isProcessing
-                  }
-                  onClick={requestProcessing}
-                >
-                  {t("app.processNewArea")}
-                </button>
-              ) : null}
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="button-with-icon"
+                    disabled={!file || !hasValidSelection || isProcessing}
+                    onClick={requestProcessing}
+                  >
+                    <PencilIcon />
+                    {isProcessing
+                      ? t("app.processing")
+                      : t("app.editSelected")}
+                  </button>
+                  {isAddingRegion || selection ? (
+                    <button
+                      type="button"
+                      className="button-with-icon secondary-button"
+                      disabled={isProcessing}
+                      onClick={() => {
+                        setSelection(null);
+                        if (isAddingRegion) {
+                          setIsAddingRegion(false);
+                          setSelectedLayerId(null);
+                        }
+                      }}
+                    >
+                      {t("app.cancel")}
+                    </button>
+                  ) : null}
+                </>
+              )}
               {processingControls}
             </div>
           </aside>
 
           <div className="editor-main">
-            <div className="editor-topbar">
-              {!result || !urls ? (
-                <div className="selection-hint">
-                  <p>
-                    <LightbulbIcon />
-                    {t("app.dragHint")}
-                  </p>
-                  <div
-                    className={`selection-actions${hasValidSelection ? " is-ready" : ""}`}
-                  >
-                    <button
-                      type="button"
-                      className="button-with-icon secondary-button"
-                      disabled={isProcessing || !hasValidSelection}
-                      aria-hidden={!hasValidSelection}
-                      tabIndex={hasValidSelection ? undefined : -1}
-                      onClick={() => setSelection(null)}
-                    >
-                      <XIcon />
-                      {t("app.cancel")}
-                    </button>
-                    <button
-                      type="button"
-                      className="button-with-icon"
-                      disabled={isProcessing || !hasValidSelection}
-                      aria-hidden={!hasValidSelection}
-                      tabIndex={hasValidSelection ? undefined : -1}
-                      onClick={requestProcessing}
-                    >
-                      <PencilIcon />
-                      {isProcessing
-                        ? t("app.processing")
-                        : t("app.editSelected")}
-                    </button>
-                  </div>
-                </div>
-              ) : (
+            {result && urls ? (
+              <div className="editor-topbar">
                 <TextToolbar
                   layer={isExportPreview ? null : selectedLayer}
                   disabled={isProcessing}
                   onChange={updateLayer}
                   textFocusKey={textFocusKey}
                 />
-              )}
-            </div>
+              </div>
+            ) : null}
 
             <div className="editor-stage">
               {!result || !urls ? (
@@ -1139,9 +1107,18 @@ export const App = () => {
                   onActivateLayer={handleActivateLayer}
                   onMoveLayer={moveLayer}
                   onRotateLayer={rotateLayer}
+                  onFontSizeLayer={setLayerFontSize}
                   onRegionSelectionChange={setSelection}
                 />
               )}
+              {showDragHint ? (
+                <div className="selection-hint" role="status">
+                  <p>
+                    <DashedBoxIcon size={18} />
+                    {t("app.dragHint")}
+                  </p>
+                </div>
+              ) : null}
               {statusCard}
             </div>
           </div>

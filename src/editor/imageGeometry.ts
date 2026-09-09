@@ -172,6 +172,71 @@ export const layerOutlinePadding = (
   return Math.max(10 * cssToImage, fontSize * 0.25)
 }
 
+export type ResizeCorner = 'nw' | 'ne' | 'sw' | 'se'
+
+const OPPOSITE_CORNER: Record<ResizeCorner, ResizeCorner> = {
+  nw: 'se',
+  ne: 'sw',
+  sw: 'ne',
+  se: 'nw',
+}
+
+const MIN_FONT_SIZE = 4
+const MAX_FONT_SIZE = 600
+
+export const resizeHandleSize = (imageWidth: number, displayWidth: number) => {
+  const cssToImage = displayWidth <= 0 ? 1 : imageWidth / displayWidth
+  return Math.max(10 * cssToImage, 8)
+}
+
+export const cappedResizeHandleSize = (
+  handleSize: number,
+  bounds: Bounds,
+  padding: number,
+) => {
+  const outlineWidth = bounds.width + padding * 2
+  const outlineHeight = bounds.height + padding * 2
+  return Math.min(
+    handleSize,
+    Math.max(outlineWidth * 0.28, 1),
+    Math.max(outlineHeight * 0.28, 1),
+  )
+}
+
+export const outlineCorners = (
+  bounds: Bounds,
+  padding = 0,
+): Record<ResizeCorner, Point> => ({
+  nw: { x: -padding, y: -padding },
+  ne: { x: bounds.width + padding, y: -padding },
+  sw: { x: -padding, y: bounds.height + padding },
+  se: { x: bounds.width + padding, y: bounds.height + padding },
+})
+
+export const isOnResizeCorner = (
+  local: Point,
+  bounds: Bounds,
+  handleSize: number,
+  padding = 0,
+): ResizeCorner | null => {
+  const reach = handleSize * 0.75
+  const corners = outlineCorners(bounds, padding)
+  let best: ResizeCorner | null = null
+  let bestDist = Infinity
+  for (const corner of Object.keys(corners) as ResizeCorner[]) {
+    const pos = corners[corner]
+    const dx = local.x - pos.x
+    const dy = local.y - pos.y
+    if (Math.abs(dx) > reach || Math.abs(dy) > reach) continue
+    const dist = dx * dx + dy * dy
+    if (dist < bestDist) {
+      best = corner
+      bestDist = dist
+    }
+  }
+  return best
+}
+
 export const isOnRotateEdge = (
   local: Point,
   bounds: Bounds,
@@ -190,6 +255,39 @@ export const isOnRotateEdge = (
     local.y >= -padding - padY &&
     local.y <= bounds.height + padding + padY
   )
+}
+
+export const fontSizeFromCornerDrag = (
+  startFontSize: number,
+  startBounds: Bounds,
+  corner: ResizeCorner,
+  localPoint: Point,
+  padding = 0,
+) => {
+  const corners = outlineCorners(startBounds, padding)
+  const pin = corners[OPPOSITE_CORNER[corner]]
+  const startHandle = corners[corner]
+  const startX = startHandle.x - pin.x
+  const startY = startHandle.y - pin.y
+  const startDist = Math.hypot(startX, startY)
+  if (startDist < 1) return startFontSize
+  const projected =
+    ((localPoint.x - pin.x) * startX + (localPoint.y - pin.y) * startY) /
+    startDist
+  return Math.max(
+    MIN_FONT_SIZE,
+    Math.min(MAX_FONT_SIZE, Math.round(startFontSize * (projected / startDist))),
+  )
+}
+
+export const resizeCursorForCorner = (
+  corner: ResizeCorner,
+  rotation: number,
+) => {
+  const nwse = corner === 'nw' || corner === 'se'
+  const normalized = ((rotation % 180) + 180) % 180
+  const swap = normalized > 45 && normalized <= 135
+  return nwse === swap ? 'nesw-resize' : 'nwse-resize'
 }
 
 export const rotationFromDrag = (
