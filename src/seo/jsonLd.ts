@@ -36,7 +36,7 @@ export const buildJsonLd = ({
   const home = absoluteUrl('/', origin)
   const faqUrl = absoluteUrl(FAQ_PATH, origin)
   const creditsUrl = absoluteUrl(HOW_IT_WORKS_PATH, origin)
-  const image = absoluteUrl('/og.png', origin)
+  const image = absoluteUrl('/og.png?v=2', origin)
 
   const app = {
     '@type': ['WebApplication', 'SoftwareApplication'],

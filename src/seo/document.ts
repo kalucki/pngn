@@ -5,7 +5,7 @@ import { EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH } from '../paths'
 import type { Translate } from '../i18n/messages'
 
 const JSON_LD_ID = 'pngn-jsonld'
-const OG_IMAGE_PATH = '/og.png'
+const OG_IMAGE_PATH = '/og.png?v=2'
 
 const PAGE_PATH: Record<SeoPage, string> = {
   home: '/',
