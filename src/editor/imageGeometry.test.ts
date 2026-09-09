@@ -15,7 +15,9 @@ import {
   resizeHandleSize,
   rotateEdgeWidth,
   rotationFromDrag,
+  scaleBoundsFromCorner,
   toLocalBoundsPoint,
+  worldFromLocalBoundsPoint,
 } from './imageGeometry'
 
 describe('image geometry mapping', () => {
@@ -193,6 +195,35 @@ describe('corner font-size handles', () => {
     expect(
       fontSizeFromCornerDrag(24, bounds, 'nw', { x: 50, y: 20 }, 0),
     ).toBeCloseTo(12)
+  })
+
+  it('round-trips local points through world space', () => {
+    const local = { x: 12, y: 7 }
+    const world = worldFromLocalBoundsPoint(local, bounds, 35)
+    const back = toLocalBoundsPoint(world, bounds, 35)
+    expect(back.x).toBeCloseTo(local.x)
+    expect(back.y).toBeCloseTo(local.y)
+  })
+
+  it('scales the box from the opposite corner', () => {
+    const grown = scaleBoundsFromCorner(bounds, 2, 'se')
+    expect(grown).toEqual({ x: 10, y: 20, width: 200, height: 80 })
+
+    const shrunk = scaleBoundsFromCorner(bounds, 0.5, 'nw')
+    expect(shrunk.width).toBe(50)
+    expect(shrunk.height).toBe(20)
+    expect(shrunk.x).toBeCloseTo(60)
+    expect(shrunk.y).toBeCloseTo(40)
+  })
+
+  it('keeps the opposite corner fixed when the layer is rotated', () => {
+    const pin = worldFromLocalBoundsPoint({ x: 0, y: 0 }, bounds, 40)
+    const next = scaleBoundsFromCorner(bounds, 2, 'se', 40)
+    const nextPin = worldFromLocalBoundsPoint({ x: 0, y: 0 }, next, 40)
+    expect(nextPin.x).toBeCloseTo(pin.x)
+    expect(nextPin.y).toBeCloseTo(pin.y)
+    expect(next.width).toBe(200)
+    expect(next.height).toBe(80)
   })
 
   it('clamps to the toolbar size range', () => {

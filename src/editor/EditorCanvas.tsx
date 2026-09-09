@@ -16,6 +16,7 @@ import {
   resizeHandleSize,
   rotateEdgeWidth,
   rotationFromDrag,
+  scaleBoundsFromCorner,
   toLocalBoundsPoint,
   type ResizeCorner,
 } from './imageGeometry'
@@ -44,7 +45,7 @@ type EditorCanvasProps = {
   onActivateLayer?: (id: string) => void
   onMoveLayer: (id: string, x: number, y: number) => void
   onRotateLayer: (id: string, rotation: number) => void
-  onFontSizeLayer: (id: string, fontSize: number) => void
+  onFontSizeLayer: (id: string, fontSize: number, bounds: Bounds) => void
   onRegionSelectionChange?: (selection: Bounds | null) => void
 }
 
@@ -607,8 +608,22 @@ export const EditorCanvas = ({
         local,
         drag.padding,
       )
-      if (fontSize !== layer.typography.fontSize) {
-        onFontSizeLayer(layer.id, fontSize)
+      const scale =
+        drag.startFontSize <= 0 ? 1 : fontSize / drag.startFontSize
+      const bounds = scaleBoundsFromCorner(
+        drag.startBounds,
+        scale,
+        drag.corner,
+        drag.startRotation,
+      )
+      if (
+        fontSize !== layer.typography.fontSize ||
+        bounds.x !== layer.bounds.x ||
+        bounds.y !== layer.bounds.y ||
+        bounds.width !== layer.bounds.width ||
+        bounds.height !== layer.bounds.height
+      ) {
+        onFontSizeLayer(layer.id, fontSize, bounds)
       }
       return
     }

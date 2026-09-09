@@ -301,6 +301,85 @@ output {
   font-weight: 500;
 }
 
+.tip-eth {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.2rem 0.35rem;
+}
+
+.tip-eth-label,
+.tip-eth-note {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.tip-eth-address {
+  border: 0;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  padding: 0.15rem 0.25rem;
+}
+
+.tip-eth-address:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.tip-eth-copy {
+  display: inline-grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  border: 1px solid var(--border);
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--text-faint);
+  padding: 0;
+}
+
+.tip-eth-copy:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.tip-eth-copy.is-copied,
+.tip-eth-copy.is-copied:hover {
+  border-color: #86efac;
+  background: #f0fdf4;
+  color: #16a34a;
+}
+
+.tip-eth-export {
+  display: grid;
+  justify-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  margin-top: 1.5rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--border);
+}
+
+.tip-eth-export .tip-eth-note {
+  max-width: 24rem;
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.tip-eth-export .tip-eth-address {
+  font-size: 0.85rem;
+}
+
 .app-root:not([hidden]):has(.app-shell.is-editor) ~ .site-footer {
   display: none;
 }

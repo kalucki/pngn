@@ -1,6 +1,7 @@
 import { useLocale } from '../i18n/useLocale'
 import { FAQ_PATH, HOW_IT_WORKS_PATH, usePath } from '../navigation'
 import { Link } from './Link'
+import { TipEth } from './TipEth'
 
 export const Footer = () => {
   const path = usePath()
@@ -48,6 +49,7 @@ export const Footer = () => {
         <p className="site-footer-copy">
           {t('footer.copyright', { year: new Date().getFullYear() })}
         </p>
+        <TipEth variant="footer" />
       </div>
     </footer>
   )

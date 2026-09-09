@@ -25,7 +25,7 @@ import {
   matchTextLayerFonts,
   mergeMatchedFontLayer,
 } from "./fonts/matchTextLayerFont";
-import { withFontSize, withTextSizeBounds } from "./editor/textLayerBounds";
+import { withTextSizeBounds } from "./editor/textLayerBounds";
 import {
   adoptRegionLayers,
   findRegionByLayerId,
@@ -561,10 +561,16 @@ export const App = () => {
     );
   };
 
-  const setLayerFontSize = (id: string, fontSize: number) => {
+  const setLayerFontSize = (
+    id: string,
+    fontSize: number,
+    bounds: Bounds,
+  ) => {
     setLayers((current) =>
       current.map((layer) =>
-        layer.id === id ? withFontSize(layer, fontSize) : layer,
+        layer.id === id
+          ? { ...layer, bounds, typography: { ...layer.typography, fontSize } }
+          : layer,
       ),
     );
   };

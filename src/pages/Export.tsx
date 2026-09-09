@@ -3,6 +3,7 @@ import { readPendingExport } from '../editor/exportTransfer'
 import { useLocale } from '../i18n/useLocale'
 import { CheckIcon, DownloadIcon } from '../layout/icons'
 import { Link } from '../layout/Link'
+import { TipEth } from '../layout/TipEth'
 
 export const ExportPage = () => {
   const pending = readPendingExport()
@@ -48,6 +49,7 @@ export const ExportPage = () => {
             {t('export.back')}
           </Link>
         </div>
+        <TipEth variant="export" />
       </section>
     </main>
   )

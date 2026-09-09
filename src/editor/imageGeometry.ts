@@ -144,6 +144,23 @@ export const toLocalBoundsPoint = (
   }
 }
 
+export const worldFromLocalBoundsPoint = (
+  local: Point,
+  bounds: Bounds,
+  rotation: number,
+): Point => {
+  const center = boundsCenter(bounds)
+  const radians = (rotation * Math.PI) / 180
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  const dx = local.x - bounds.width / 2
+  const dy = local.y - bounds.height / 2
+  return {
+    x: center.x + dx * cos - dy * sin,
+    y: center.y + dx * sin + dy * cos,
+  }
+}
+
 export const pointInRotatedBounds = (
   point: Point,
   bounds: Bounds,
@@ -278,6 +295,37 @@ export const fontSizeFromCornerDrag = (
     MIN_FONT_SIZE,
     Math.min(MAX_FONT_SIZE, Math.round(startFontSize * (projected / startDist))),
   )
+}
+
+export const scaleBoundsFromCorner = (
+  startBounds: Bounds,
+  scale: number,
+  corner: ResizeCorner,
+  rotation = 0,
+): Bounds => {
+  const width = Math.max(1, startBounds.width * scale)
+  const height = Math.max(1, startBounds.height * scale)
+  const pinWorld = worldFromLocalBoundsPoint(
+    outlineCorners(startBounds)[OPPOSITE_CORNER[corner]],
+    startBounds,
+    rotation,
+  )
+  const pinLocal = outlineCorners({ x: 0, y: 0, width, height })[
+    OPPOSITE_CORNER[corner]
+  ]
+  const radians = (rotation * Math.PI) / 180
+  const cos = Math.cos(radians)
+  const sin = Math.sin(radians)
+  const dx = pinLocal.x - width / 2
+  const dy = pinLocal.y - height / 2
+  const centerX = pinWorld.x - (dx * cos - dy * sin)
+  const centerY = pinWorld.y - (dx * sin + dy * cos)
+  return {
+    x: centerX - width / 2,
+    y: centerY - height / 2,
+    width,
+    height,
+  }
 }
 
 export const resizeCursorForCorner = (
