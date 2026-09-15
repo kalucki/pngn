@@ -31,6 +31,7 @@ export const drawLayerText = (
     typography.fontWeight,
     typography.fontSize,
     typography.fontFamily,
+    typography.italic,
   )
   context.textAlign = typography.alignment
   context.textBaseline = 'alphabetic'

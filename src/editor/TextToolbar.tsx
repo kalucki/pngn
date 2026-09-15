@@ -15,6 +15,7 @@ import {
   nearestWeight,
   type FontCategory,
 } from "./fonts";
+import { fallbackFontChoice } from "../fonts/fontFallback";
 
 const COMPACT_TOOLBAR_PX = 840;
 
@@ -25,7 +26,7 @@ type TextToolbarProps = {
   textFocusKey?: number;
 };
 
-type FontStatus = "idle" | "loading" | "error";
+type FontStatus = "idle" | "loading";
 
 const FONT_GROUP_KEYS: Record<FontCategory, MessageKey> = {
   system: "fontGroup.system",
@@ -68,6 +69,13 @@ export const TextToolbar = ({
   const [compact, setCompact] = useState(false);
   const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
+  const layerRef = useRef(layer);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    layerRef.current = layer;
+    onChangeRef.current = onChange;
+  }, [layer, onChange]);
 
   const inactive = !layer;
   const locked = inactive || disabled;
@@ -91,7 +99,27 @@ export const TextToolbar = ({
       fontWeight,
       isFontFailed(fontFamily, fontWeight),
     ).then(() => {
-      if (!cancelled) setFontEpoch((epoch) => epoch + 1);
+      if (cancelled) return;
+      setFontEpoch((epoch) => epoch + 1);
+      const current = layerRef.current;
+      if (
+        !current ||
+        current.typography.fontFamily !== fontFamily ||
+        !isFontFailed(fontFamily, fontWeight)
+      ) {
+        return;
+      }
+      const next = fallbackFontChoice(current, fontFamily, fontWeight);
+      if (next.family === fontFamily && next.weight === fontWeight) return;
+      onChangeRef.current({
+        ...current,
+        typography: {
+          ...current.typography,
+          fontFamily: next.family,
+          fontWeight: next.weight,
+          italic: next.italic,
+        },
+      });
     });
     return () => {
       cancelled = true;
@@ -120,11 +148,12 @@ export const TextToolbar = ({
   }, []);
 
   const fontStatus: FontStatus =
-    fontEpoch >= 0 && layer && isFontFailed(fontFamily, fontWeight)
-      ? "error"
-      : layer && !isFontReady(fontFamily, fontWeight)
-        ? "loading"
-        : "idle";
+    fontEpoch >= 0 &&
+    layer &&
+    !isFontReady(fontFamily, fontWeight) &&
+    !isFontFailed(fontFamily, fontWeight)
+      ? "loading"
+      : "idle";
   const fontMatchPending = layer?.fontMatch?.status === "pending";
 
   const updateTypography = (patch: Partial<TextLayer["typography"]>) => {
@@ -142,6 +171,7 @@ export const TextToolbar = ({
       ].filter(
         (font, index, fonts) =>
           font.family &&
+          !isFontFailed(font.family, font.weight) &&
           fonts.findIndex((item) => item.family === font.family) === index,
       )
     : [];
@@ -226,12 +256,6 @@ export const TextToolbar = ({
               !inactive && (fontStatus === "loading" || fontMatchPending)
             }
             disabled={locked}
-            error={!inactive && fontStatus === "error"}
-            title={
-              !inactive && fontStatus === "error"
-                ? t("toolbar.fontError")
-                : undefined
-            }
             placeholder={t("toolbar.font")}
             nothingFoundMessage={t("toolbar.fontEmpty")}
             value={fontFamily || null}

@@ -7,6 +7,7 @@ import {
   autoApplyDecision,
   DEFAULT_OCR_FONT,
   rerankFontCandidates,
+  tightenToInk,
 } from './rerankFont'
 import type { FontCandidate } from './storiaLabels'
 
@@ -16,6 +17,11 @@ const MIN_MATCH_HEIGHT = 4
 const MIN_MATCH_CROP_HEIGHT = 64
 const MAX_MATCH_CROP_SIDE = 960
 const MAX_MATCH_CROP_SCALE = 12
+const CROP_PAD_RATIO = 0.1
+const MODEL_TOP_K = 12
+
+export const cropPadFor = (height: number) =>
+  Math.max(2, Math.round(height * CROP_PAD_RATIO))
 
 const formatCandidate = (candidate: FontCandidate & { renderScore?: number }) => {
   const score = candidate.renderScore ?? candidate.score
@@ -89,7 +95,7 @@ export const mergeMatchedFontLayer = (current: TextLayer, matched: TextLayer) =>
 }
 
 const cropLayer = (bitmap: ImageBitmap, layer: TextLayer) => {
-  const pad = Math.max(3, Math.round(layer.bounds.height * 0.28))
+  const pad = cropPadFor(layer.bounds.height)
   const x = Math.max(0, Math.floor(layer.bounds.x - pad))
   const y = Math.max(0, Math.floor(layer.bounds.y - pad))
   const right = Math.min(bitmap.width, Math.ceil(layer.bounds.x + layer.bounds.width + pad))
@@ -118,7 +124,7 @@ const cropLayer = (bitmap: ImageBitmap, layer: TextLayer) => {
   return context.getImageData(0, 0, canvas.width, canvas.height)
 }
 
-const applyBestCandidate = (layer: TextLayer, family: string, weight: number) => {
+const applyBestCandidate = (layer: TextLayer, family: string, weight: number, italic: boolean) => {
   const font = fontByFamily(family)
   return {
     ...layer,
@@ -126,6 +132,7 @@ const applyBestCandidate = (layer: TextLayer, family: string, weight: number) =>
       ...layer.typography,
       fontFamily: family,
       fontWeight: font ? nearestWeight(font.weights, weight) : weight,
+      italic,
     },
   }
 }
@@ -135,6 +142,7 @@ const withFittedSize = async (layer: TextLayer) => {
     text: layer.originalText || layer.text,
     fontFamily: layer.typography.fontFamily,
     fontWeight: layer.typography.fontWeight,
+    italic: layer.typography.italic,
     bounds: layer.bounds,
   })
   if (Math.abs(fontSize - layer.typography.fontSize) < 0.05) return layer
@@ -167,11 +175,16 @@ const matchLayer = async (bitmap: ImageBitmap, layer: TextLayer) => {
 
   try {
     const crop = cropLayer(bitmap, layer)
+    const modelCrop = tightenToInk(crop)
     console.info(
       LOG,
-      `matching ${label} crop ${crop.width}×${crop.height} from ${layer.bounds.width.toFixed(1)}×${layer.bounds.height.toFixed(1)} OCR ${layer.processing.recognitionConfidence.toFixed(2)}`,
+      `matching ${label} crop ${crop.width}×${crop.height}` +
+        (modelCrop !== crop
+          ? ` model ${modelCrop.width}×${modelCrop.height}`
+          : '') +
+        ` from ${layer.bounds.width.toFixed(1)}×${layer.bounds.height.toFixed(1)} OCR ${layer.processing.recognitionConfidence.toFixed(2)}`,
     )
-    const modelCandidates = await identifyFont(crop, 10)
+    const modelCandidates = await identifyFont(modelCrop, MODEL_TOP_K)
     console.info(
       LOG,
       `Storia top for ${label}:`,
@@ -191,6 +204,7 @@ const matchLayer = async (bitmap: ImageBitmap, layer: TextLayer) => {
       .map((candidate) => ({
         family: candidate.family,
         weight: candidate.weight,
+        italic: candidate.italic,
       }))
     const matched = attachMatch(layer, {
       family: best.family,
@@ -206,7 +220,9 @@ const matchLayer = async (bitmap: ImageBitmap, layer: TextLayer) => {
         LOG,
         `auto-apply ${label}: ${formatCandidate(best)} — ${decision.reason}`,
       )
-      return withFittedSize(applyBestCandidate(matched, best.family, best.weight))
+      return withFittedSize(
+        applyBestCandidate(matched, best.family, best.weight, best.italic),
+      )
     }
     console.info(
       LOG,

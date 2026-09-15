@@ -61,6 +61,9 @@ describe('font helpers', () => {
     expect(canvasFont(700, 24, 'Playfair Display')).toBe(
       '700 24px "Playfair Display", Georgia, "Times New Roman", Times, serif',
     )
+    expect(canvasFont(700, 32, 'Open Sans', true)).toBe(
+      'italic 700 32px "Open Sans", Arial, Helvetica, sans-serif',
+    )
   })
 
   it('picks the closest available weight', () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { TextLayer } from '../document/types'
 import { defaultOcrFontSize } from './fitFontSize'
 import {
+  cropPadFor,
   cropScaleFor,
   isDefaultOcrSize,
   isDefaultOcrTypography,
@@ -88,6 +89,11 @@ describe('font match layer filters', () => {
     expect(cropScaleFor(52, 11)).toBeCloseTo(64 / 11)
     expect(cropScaleFor(400, 80)).toBe(1)
     expect(cropScaleFor(2000, 8)).toBe(1)
+  })
+
+  it('keeps crop padding tight so glyphs fill the Storia letterbox', () => {
+    expect(cropPadFor(24)).toBe(2)
+    expect(cropPadFor(80)).toBe(8)
   })
 
   it('marks viable layers pending and recognizes default OCR typography', () => {

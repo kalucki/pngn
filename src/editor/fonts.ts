@@ -325,8 +325,9 @@ export const canvasFont = (
   fontWeight: number,
   fontSize: number,
   fontFamily: string,
+  italic = false,
 ) =>
-  `${fontWeight} ${fontSize}px "${fontFamily.replaceAll('"', '\\"')}", ${fallbackStack(fontFamily)}`
+  `${italic ? 'italic ' : ''}${fontWeight} ${fontSize}px "${fontFamily.replaceAll('"', '\\"')}", ${fallbackStack(fontFamily)}`
 
 export const googleCssUrl = (family: string, weight: number) => {
   const familyParam = encodeURIComponent(family).replaceAll('%20', '+')

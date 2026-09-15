@@ -78,11 +78,13 @@ export const fitFontSizeToBounds = async ({
   text,
   fontFamily,
   fontWeight,
+  italic = false,
   bounds,
 }: {
   text: string
   fontFamily: string
   fontWeight: number
+  italic?: boolean
   bounds: Pick<Bounds, 'width' | 'height'>
 }) => {
   const fallback = defaultOcrFontSize(bounds.height)
@@ -104,14 +106,14 @@ export const fitFontSizeToBounds = async ({
 
   context.textAlign = 'left'
   context.textBaseline = 'alphabetic'
-  context.font = canvasFont(weight, SAMPLE_SIZE, fontFamily)
+  context.font = canvasFont(weight, SAMPLE_SIZE, fontFamily, italic)
   let fontSize = fontSizeFromMetrics(
     SAMPLE_SIZE,
     measureInkHeight(context, lines, SAMPLE_SIZE),
     bounds.height,
   )
 
-  context.font = canvasFont(weight, fontSize, fontFamily)
+  context.font = canvasFont(weight, fontSize, fontFamily, italic)
   return fontSizeFromMetrics(
     fontSize,
     measureInkHeight(context, lines, fontSize),

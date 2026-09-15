@@ -47,6 +47,7 @@ export type TextLayer = {
     fontFamily: string
     fontSize: number
     fontWeight: number
+    italic?: boolean
     color: string
     strokeColor: string
     strokeWidth: number
@@ -64,7 +65,7 @@ export type TextLayer = {
     score: number
     status: 'pending' | 'ready' | 'skipped' | 'error'
     requestId?: string
-    similar: Array<{ family: string; weight: number }>
+    similar: Array<{ family: string; weight: number; italic?: boolean }>
   }
   processing: {
     recognitionConfidence: number
