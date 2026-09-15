@@ -1725,7 +1725,7 @@ html.js #seo-prerender {
   padding: 0.7rem 1.15rem;
   box-shadow:
     0 12px 32px rgb(0 0 0 / 0.28),
-    0 0 0 0 color-mix(in srgb, var(--coral) 70%, transparent);
+    0 0 0 0 rgb(0 0 0 / 0.22);
   animation:
     selection-hint-in 0.32s ease both,
     selection-hint-pulse 1.8s 0.35s ease-out 3;
@@ -1750,7 +1750,7 @@ html.js #seo-prerender {
   50% {
     box-shadow:
       0 12px 32px rgb(0 0 0 / 0.28),
-      0 0 0 12px color-mix(in srgb, var(--coral) 0%, transparent);
+      0 0 18px 12px rgb(0 0 0 / 0);
   }
 }
 

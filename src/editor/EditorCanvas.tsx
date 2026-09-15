@@ -38,10 +38,13 @@ type EditorCanvasProps = {
   width: number
   height: number
   layers: TextLayer[]
-  selectedLayerId: string | null
+  selectedLayerIds: string[]
   interactionMode?: 'edit' | 'select-region' | 'preview'
   regionSelection?: Bounds | null
-  onSelectLayer: (id: string | null) => void
+  onSelectLayer: (
+    id: string | null,
+    options?: { additive?: boolean },
+  ) => void
   onActivateLayer?: (id: string) => void
   onMoveLayer: (id: string, x: number, y: number) => void
   onRotateLayer: (id: string, rotation: number) => void
@@ -83,6 +86,8 @@ type ClickCandidate = {
   id: string
   clientX: number
   clientY: number
+  additive: boolean
+  toggleIfClick: boolean
 }
 
 const CLICK_MOVE_THRESHOLD_PX = 5
@@ -116,7 +121,7 @@ export const EditorCanvas = ({
   width,
   height,
   layers,
-  selectedLayerId,
+  selectedLayerIds,
   interactionMode = 'edit',
   regionSelection = null,
   onSelectLayer,
@@ -155,10 +160,11 @@ export const EditorCanvas = ({
 
   const hitAtPoint = (canvas: HTMLCanvasElement, point: Point): LayerHit | null => {
     const displayWidth = displayedImageWidth(canvas, width, height)
+    const selectedIds = new Set(selectedLayerIds)
     for (const layer of [...layers].reverse()) {
       const local = toLocalBoundsPoint(point, layer.bounds, layer.rotation)
       const { pad, handleSize } = outlineMetrics(layer, displayWidth)
-      const selected = layer.id === selectedLayerId
+      const selected = selectedIds.has(layer.id)
       if (selected) {
         const corner = isOnResizeCorner(local, layer.bounds, handleSize, pad)
         if (corner) return { layer, action: 'scale', corner }
@@ -234,6 +240,7 @@ export const EditorCanvas = ({
 
       const paintLayers = withSettledFonts(layers, settledLayersRef.current)
       if (paintLayers === layers) settledLayersRef.current = layers
+      const selectedIds = new Set(selectedLayerIds)
 
       for (const [index, layer] of layers.entries()) {
         const { effects } = layer
@@ -253,7 +260,7 @@ export const EditorCanvas = ({
         if (interactionMode === 'preview') continue
 
         const { bounds, typography } = layer
-        const selected = layer.id === selectedLayerId
+        const selected = selectedIds.has(layer.id)
         const pad =
           layerOutlinePadding(
             typography.fontSize,
@@ -342,7 +349,7 @@ export const EditorCanvas = ({
       interactionMode,
       layers,
       regionSelection,
-      selectedLayerId,
+      selectedLayerIds,
       showGrid,
       syncCanvasLayout,
       width,
@@ -382,7 +389,7 @@ export const EditorCanvas = ({
     return () => {
       cancelled = true
     }
-  }, [draw, layers, regionSelection, selectedLayerId])
+  }, [draw, layers, regionSelection, selectedLayerIds])
 
   useLayoutEffect(() => {
     if (layoutSize.width <= 0) return
@@ -520,7 +527,13 @@ export const EditorCanvas = ({
       return
     }
     const hit = hitAtPoint(event.currentTarget, point)
-    onSelectLayer(hit?.layer.id ?? null)
+    const additive = event.shiftKey
+    const alreadySelected = Boolean(
+      hit && selectedLayerIds.includes(hit.layer.id),
+    )
+    if (!(additive && alreadySelected)) {
+      onSelectLayer(hit?.layer.id ?? null, { additive })
+    }
     if (!hit) return
     if (hit.action === 'rotate') {
       dragRef.current = {
@@ -551,6 +564,8 @@ export const EditorCanvas = ({
         id: hit.layer.id,
         clientX: event.clientX,
         clientY: event.clientY,
+        additive,
+        toggleIfClick: additive && alreadySelected,
       }
       dragRef.current = {
         type: 'move',
@@ -661,7 +676,11 @@ export const EditorCanvas = ({
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
     if (clickCandidate && interactionMode === 'edit') {
-      onActivateLayer?.(clickCandidate.id)
+      if (clickCandidate.toggleIfClick) {
+        onSelectLayer(clickCandidate.id, { additive: true })
+      } else if (!clickCandidate.additive) {
+        onActivateLayer?.(clickCandidate.id)
+      }
     }
     updateCursor(event.currentTarget, point, null)
   }

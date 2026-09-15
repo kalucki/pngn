@@ -4,7 +4,6 @@ import type { TextLayer } from "../document/types";
 import { useLocale } from "../i18n/useLocale";
 import type { MessageKey } from "../i18n/messages";
 import { ColorSwatchInput } from "../ui/ColorSwatchInput";
-import { defaultStrokeWidth } from "./drawTextLayer";
 import {
   ensureFont,
   FONT_GROUP_ORDER,
@@ -16,6 +15,10 @@ import {
   type FontCategory,
 } from "./fonts";
 import { fallbackFontChoice } from "../fonts/fontFallback";
+import {
+  applyLayerStylePatch,
+  type LayerStylePatch,
+} from "./applyLayerStyle";
 
 const COMPACT_TOOLBAR_PX = 840;
 
@@ -23,6 +26,7 @@ type TextToolbarProps = {
   layer: TextLayer | null;
   disabled?: boolean;
   onChange: (layer: TextLayer) => void;
+  onStyleChange?: (patch: LayerStylePatch) => void;
   textFocusKey?: number;
 };
 
@@ -62,6 +66,7 @@ export const TextToolbar = ({
   layer,
   disabled = false,
   onChange,
+  onStyleChange,
   textFocusKey = 0,
 }: TextToolbarProps) => {
   const { t } = useLocale();
@@ -156,12 +161,17 @@ export const TextToolbar = ({
       : "idle";
   const fontMatchPending = layer?.fontMatch?.status === "pending";
 
-  const updateTypography = (patch: Partial<TextLayer["typography"]>) => {
+  const emitStyle = (patch: LayerStylePatch) => {
     if (!layer) return;
-    onChange({
-      ...layer,
-      typography: { ...layer.typography, ...patch },
-    });
+    if (onStyleChange) {
+      onStyleChange(patch);
+      return;
+    }
+    onChange(applyLayerStylePatch(layer, patch));
+  };
+
+  const updateTypography = (patch: Partial<TextLayer["typography"]>) => {
+    emitStyle({ typography: patch });
   };
 
   const detectedFamilies = layer?.fontMatch
@@ -176,16 +186,11 @@ export const TextToolbar = ({
       )
     : [];
   const applyFontFamily = (family: string, weight?: number) => {
-    const nextFont = fontByFamily(family);
-    updateTypography({
-      fontFamily: family,
-      fontWeight: nextFont
-        ? nearestWeight(
-            nextFont.weights,
-            weight ?? layer?.typography.fontWeight ?? 400,
-          )
-        : (weight ?? layer?.typography.fontWeight ?? 400),
-    });
+    updateTypography(
+      weight === undefined
+        ? { fontFamily: family }
+        : { fontFamily: family, fontWeight: weight },
+    );
   };
 
   const fontSelectData = [
@@ -352,16 +357,7 @@ export const TextToolbar = ({
                 ? layer.typography.strokeColor
                 : "#000000"
             }
-            onChange={(strokeColor) => {
-              if (!layer) return;
-              updateTypography({
-                strokeColor,
-                strokeWidth:
-                  layer.typography.strokeWidth > 0
-                    ? layer.typography.strokeWidth
-                    : defaultStrokeWidth(layer.typography.fontSize),
-              });
-            }}
+            onChange={(strokeColor) => updateTypography({ strokeColor })}
           />
           <NumberInput
             size="xs"
@@ -393,16 +389,7 @@ export const TextToolbar = ({
           thumbLabel={t("toolbar.opacity")}
           label={(value) => `${Math.round(value * 100)}%`}
           value={layer?.effects.opacity ?? 1}
-          onChange={(opacity) => {
-            if (!layer) return;
-            onChange({
-              ...layer,
-              effects: {
-                ...layer.effects,
-                opacity,
-              },
-            });
-          }}
+          onChange={(opacity) => emitStyle({ effects: { opacity } })}
         />
       </label>
       </div>

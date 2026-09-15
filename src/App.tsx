@@ -26,6 +26,8 @@ import {
   mergeMatchedFontLayer,
 } from "./fonts/matchTextLayerFont";
 import { withTextSizeBounds } from "./editor/textLayerBounds";
+import { applyLayerStylePatch, type LayerStylePatch } from "./editor/applyLayerStyle";
+import { nextSelectedLayerIds } from "./editor/layerSelection";
 import {
   adoptRegionLayers,
   findRegionByLayerId,
@@ -211,7 +213,7 @@ export const App = () => {
   const [source, setSource] = useState<ImageSource | null>(null);
   const [selection, setSelection] = useState<Bounds | null>(null);
   const [options, setOptions] = useState<ProcessingOptions>(initialOptions);
-  const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>([]);
   const [textFocusKey, setTextFocusKey] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -227,13 +229,14 @@ export const App = () => {
   const regionsRef = useRef<ProcessedRegion[]>([]);
   const optionsRef = useRef(options);
   const layersRef = useRef(layers);
-  const selectedLayerIdRef = useRef(selectedLayerId);
+  const selectedLayerIdsRef = useRef(selectedLayerIds);
   const urlsRef = useRef(urls);
   const isAddingRegionRef = useRef(isAddingRegion);
   const isProcessingRef = useRef(isProcessing);
   const removeLayerChainRef = useRef(Promise.resolve());
   const requestApplyToLayerRef = useRef<(layerId: string) => void>(() => {});
 
+  const selectedLayerId = selectedLayerIds[0] ?? null;
   const selectedLayer = useMemo(
     () => layers.find((layer) => layer.id === selectedLayerId) ?? null,
     [layers, selectedLayerId],
@@ -345,7 +348,9 @@ export const App = () => {
         return;
       }
 
-      const keepId = selectedLayerIdRef.current;
+      const keepIds = selectedLayerIdsRef.current.filter((id) =>
+        nextLayers.some((layer) => layer.id === id),
+      );
       setRegions(nextRegions);
       setUrls(nextUrls);
       setResult({
@@ -360,10 +365,16 @@ export const App = () => {
         },
       });
       setLayers(nextLayers);
-      setSelectedLayerId(
-        nextRegionLayers.some((layer) => layer.id === keepId)
-          ? keepId
-          : (nextRegionLayers[0]?.id ?? keepId),
+      setSelectedLayerIds(
+        config.replaceRegionId
+          ? keepIds.length > 0
+            ? keepIds
+            : nextRegionLayers[0]
+              ? [nextRegionLayers[0].id]
+              : []
+          : nextRegionLayers[0]
+            ? [nextRegionLayers[0].id]
+            : [],
       );
       setIsExportPreview(false);
       if (!config.replaceRegionId) {
@@ -445,7 +456,7 @@ export const App = () => {
     regionsRef.current = regions;
     optionsRef.current = options;
     layersRef.current = layers;
-    selectedLayerIdRef.current = selectedLayerId;
+    selectedLayerIdsRef.current = selectedLayerIds;
     urlsRef.current = urls;
     isAddingRegionRef.current = isAddingRegion;
     isProcessingRef.current = isProcessing;
@@ -478,7 +489,7 @@ export const App = () => {
       setSelection(null);
       if (isAddingRegion) {
         setIsAddingRegion(false);
-        setSelectedLayerId(null);
+        setSelectedLayerIds([]);
       }
     };
 
@@ -488,12 +499,12 @@ export const App = () => {
 
   useEffect(() => {
     if (!file || isAddingRegion || isProcessing || isExportPreview) return;
-    const layerId = selectedLayerIdRef.current;
+    const layerId = selectedLayerIdsRef.current[0];
     if (!layerId) return;
     const region = findRegionByLayerId(regionsRef.current, layerId);
     if (!region || optionsEqual(region.options, options)) return;
     const timeout = window.setTimeout(() => {
-      const activeLayerId = selectedLayerIdRef.current;
+      const activeLayerId = selectedLayerIdsRef.current[0];
       if (activeLayerId) requestApplyToLayerRef.current(activeLayerId);
     }, 450);
     return () => window.clearTimeout(timeout);
@@ -547,7 +558,7 @@ export const App = () => {
     setResult(null);
     setUrls(null);
     setLayers([]);
-    setSelectedLayerId(null);
+    setSelectedLayerIds([]);
     setIsAddingRegion(false);
     setIsExportPreview(false);
     setRegions([]);
@@ -557,6 +568,17 @@ export const App = () => {
     setLayers((current) =>
       current.map((layer) =>
         layer.id === nextLayer.id ? withTextSizeBounds(nextLayer) : layer,
+      ),
+    );
+  };
+
+  const updateSelectedLayerStyle = (patch: LayerStylePatch) => {
+    const ids = selectedLayerIdsRef.current;
+    if (ids.length === 0) return;
+    const selected = new Set(ids);
+    setLayers((current) =>
+      current.map((layer) =>
+        selected.has(layer.id) ? applyLayerStylePatch(layer, patch) : layer,
       ),
     );
   };
@@ -577,16 +599,20 @@ export const App = () => {
 
   const handleSelectLayer = (
     id: string | null,
-    source: LayerSelectSource = "canvas",
+    options: { source?: LayerSelectSource; additive?: boolean } = {},
   ) => {
     if (isProcessingRef.current) return;
+    const source = options.source ?? "canvas";
+    const additive = Boolean(options.additive);
     setIsExportPreview(false);
-    setSelectedLayerId(id);
+    setSelectedLayerIds((current) =>
+      nextSelectedLayerIds(current, id, additive),
+    );
     if (id) {
       setIsAddingRegion(false);
       setSelection(null);
     }
-    if (source === "sidebar" && id) {
+    if (source === "sidebar" && id && !additive) {
       requestApplyToLayer(id);
     }
   };
@@ -634,13 +660,15 @@ export const App = () => {
       nextRegions = nextRegions.filter((entry) => entry.id !== region.id);
     }
 
-    const previousSelected = selectedLayerIdRef.current;
+    const previousSelected = selectedLayerIdsRef.current;
     setLayers(nextLayers);
-    if (previousSelected === id) {
+    if (previousSelected.includes(id)) {
+      const remaining = previousSelected.filter((layerId) => layerId !== id);
+      const neighbor = (nextLayers[index] ?? nextLayers[index - 1])?.id;
       const nextSelected =
-        (nextLayers[index] ?? nextLayers[index - 1])?.id ?? null;
-      selectedLayerIdRef.current = nextSelected;
-      setSelectedLayerId(nextSelected);
+        remaining.length > 0 ? remaining : neighbor ? [neighbor] : [];
+      selectedLayerIdsRef.current = nextSelected;
+      setSelectedLayerIds(nextSelected);
     }
 
     try {
@@ -702,8 +730,8 @@ export const App = () => {
     } catch (error) {
       if (generation === processingGenerationRef.current) {
         setLayers(currentLayers);
-        selectedLayerIdRef.current = previousSelected;
-        setSelectedLayerId(previousSelected);
+        selectedLayerIdsRef.current = previousSelected;
+        setSelectedLayerIds(previousSelected);
       }
       throw error;
     }
@@ -1011,7 +1039,7 @@ export const App = () => {
             />
             <LayersPanel
               layers={layers}
-              selectedLayerId={selectedLayerId}
+              selectedLayerIds={selectedLayerIds}
               staleLayerIds={dirtyLayerIds}
               disabled={isProcessing}
               onSelectLayer={handleSelectLayer}
@@ -1026,7 +1054,7 @@ export const App = () => {
                   onClick={() => {
                     setIsAddingRegion(true);
                     setSelection(null);
-                    setSelectedLayerId(null);
+                    setSelectedLayerIds([]);
                     setIsExportPreview(false);
                   }}
                 >
@@ -1055,7 +1083,7 @@ export const App = () => {
                         setSelection(null);
                         if (isAddingRegion) {
                           setIsAddingRegion(false);
-                          setSelectedLayerId(null);
+                          setSelectedLayerIds([]);
                         }
                       }}
                     >
@@ -1075,6 +1103,7 @@ export const App = () => {
                   layer={isExportPreview ? null : selectedLayer}
                   disabled={isProcessing}
                   onChange={updateLayer}
+                  onStyleChange={updateSelectedLayerStyle}
                   textFocusKey={textFocusKey}
                 />
               </div>
@@ -1098,7 +1127,7 @@ export const App = () => {
                   width={result.width}
                   height={result.height}
                   layers={layers}
-                  selectedLayerId={selectedLayerId}
+                  selectedLayerIds={selectedLayerIds}
                   interactionMode={
                     isProcessing
                       ? "preview"

@@ -4,10 +4,13 @@ import { TrashIcon } from '../layout/icons'
 
 type LayersPanelProps = {
   layers: TextLayer[]
-  selectedLayerId: string | null
+  selectedLayerIds: string[]
   staleLayerIds?: ReadonlySet<string>
   disabled?: boolean
-  onSelectLayer: (id: string, source?: 'sidebar' | 'canvas') => void
+  onSelectLayer: (
+    id: string,
+    options?: { source?: 'sidebar' | 'canvas'; additive?: boolean },
+  ) => void
   onRemoveLayer: (id: string) => void
 }
 
@@ -19,7 +22,7 @@ const layerLabel = (layer: TextLayer, fallback: string) => {
 
 export const LayersPanel = ({
   layers,
-  selectedLayerId,
+  selectedLayerIds,
   staleLayerIds,
   disabled = false,
   onSelectLayer,
@@ -37,7 +40,7 @@ export const LayersPanel = ({
       <ul className="layers-list" aria-label={t('layers.aria')}>
         {ordered.map((layer, reverseIndex) => {
           const index = layers.length - reverseIndex
-          const selected = layer.id === selectedLayerId
+          const selected = selectedLayerIds.includes(layer.id)
           const stale = staleLayerIds?.has(layer.id) ?? false
           return (
             <li key={layer.id}>
@@ -50,7 +53,15 @@ export const LayersPanel = ({
                   aria-pressed={selected}
                   disabled={disabled}
                   title={stale ? t('app.applySettingsHint') : undefined}
-                  onClick={() => onSelectLayer(layer.id, 'sidebar')}
+                  onMouseDown={(event) => {
+                    if (event.shiftKey) event.preventDefault()
+                  }}
+                  onClick={(event) =>
+                    onSelectLayer(layer.id, {
+                      source: 'sidebar',
+                      additive: event.shiftKey,
+                    })
+                  }
                 >
                   <span className="layer-type" aria-hidden="true">
                     T
