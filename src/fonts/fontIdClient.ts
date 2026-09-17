@@ -69,6 +69,13 @@ export const warmupFontIdWorker = () => {
   getWorker()
 }
 
+// Tells the worker to pre-build the Storia ONNX session. Call this once the
+// model's bytes are already in Cache Storage so it resolves with no network
+// round trip, ahead of the first font match request.
+export const warmupFontIdSession = () => {
+  getWorker().postMessage({ type: 'warmup' })
+}
+
 const identifyFontNow = (crop: ImageData, topK: number) =>
   new Promise<FontCandidate[]>((resolve, reject) => {
     const requestId = crypto.randomUUID()
@@ -94,6 +101,7 @@ const identifyFontNow = (crop: ImageData, topK: number) =>
     const pixels = crop.data.slice().buffer
     getWorker().postMessage(
       {
+        type: 'identify',
         requestId,
         pixels,
         width: crop.width,

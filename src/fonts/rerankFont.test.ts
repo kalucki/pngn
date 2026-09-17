@@ -5,9 +5,15 @@ import {
   DEFAULT_OCR_FONT,
   edgeMask,
   inkBounds,
+  letterSpacingForWidth,
+  letterSpacingToLayer,
   maskIoU,
+  neighborWeights,
   otsuThreshold,
+  sampleRemovalMask,
   shouldAutoApplyFont,
+  spacingGapsFor,
+  removalInkWidth,
   type RankedFontCandidate,
 } from './rerankFont'
 
@@ -128,5 +134,95 @@ describe('font rerank scoring', () => {
     expect(combinedRenderScore(0.52, 0.48, 0.08)).toBeGreaterThan(
       combinedRenderScore(0.31, 0.29, 0.6),
     )
+  })
+})
+
+describe('glyph mask sampling', () => {
+  it('maps the segmentation mask into the upscaled crop', () => {
+    const removal = {
+      bounds: { x: 10, y: 10, width: 4, height: 2 },
+      mask: Uint8Array.from([255, 0, 255, 0, 0, 255, 0, 255]),
+    }
+    expect(
+      Array.from(
+        sampleRemovalMask(removal, {
+          x: 10,
+          y: 10,
+          sourceWidth: 4,
+          sourceHeight: 2,
+          width: 4,
+          height: 2,
+        }),
+      ),
+    ).toEqual([1, 0, 1, 0, 0, 1, 0, 1])
+    expect(
+      Array.from(
+        sampleRemovalMask(removal, {
+          x: 10,
+          y: 10,
+          sourceWidth: 4,
+          sourceHeight: 2,
+          width: 8,
+          height: 4,
+        }),
+      ).slice(0, 8),
+    ).toEqual([1, 1, 0, 0, 1, 1, 0, 0])
+  })
+
+  it('measures the original glyph span from the removal mask', () => {
+    const removal = {
+      bounds: { x: 10, y: 10, width: 8, height: 3 },
+      mask: Uint8Array.from([
+        0, 255, 255, 0, 0, 255, 255, 0,
+        0, 255, 0, 0, 0, 0, 255, 0,
+        0, 255, 255, 0, 0, 255, 255, 0,
+      ]),
+    }
+    expect(removalInkWidth(removal)).toBe(6)
+  })
+
+  it('accounts for crop padding around the OCR box', () => {
+    const removal = {
+      bounds: { x: 10, y: 10, width: 2, height: 1 },
+      mask: Uint8Array.from([255, 255]),
+    }
+    const sampled = sampleRemovalMask(removal, {
+      x: 8,
+      y: 8,
+      sourceWidth: 6,
+      sourceHeight: 5,
+      width: 6,
+      height: 5,
+    })
+    expect(sampled[2 * 6 + 2]).toBe(1)
+    expect(sampled[0]).toBe(0)
+  })
+})
+
+describe('weight neighbors', () => {
+  it('tries nearby catalog weights around the model pick', () => {
+    expect(neighborWeights([400, 500, 600, 700, 800, 900], 700)).toEqual([
+      700, 600, 800,
+    ])
+    expect(neighborWeights([300, 400, 500, 700, 900], 700)).toEqual([
+      700, 500, 900,
+    ])
+    expect(neighborWeights([400], 400)).toEqual([400])
+  })
+})
+
+describe('letter spacing restore', () => {
+  it('spreads leftover width across letter gaps and clamps', () => {
+    expect(spacingGapsFor('Hello')).toBe(4)
+    expect(spacingGapsFor('Hi\nWorld')).toBe(4)
+    expect(letterSpacingForWidth(100, 80, 4, 10)).toBe(5)
+    expect(letterSpacingForWidth(100, 80, 4, 3)).toBe(3)
+    expect(letterSpacingForWidth(80, 100, 4, 10)).toBe(-5)
+  })
+
+  it('converts crop-space tracking back to image pixels', () => {
+    expect(letterSpacingToLayer(-24, 4)).toBe(-6)
+    expect(letterSpacingToLayer(-10.9, 1)).toBe(-10.9)
+    expect(letterSpacingToLayer(8, 12)).toBeCloseTo(8 / 12)
   })
 })

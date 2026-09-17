@@ -1,5 +1,6 @@
-import type { Bounds, TextLayer } from '../document/types'
+import type { Bounds, LayerRemoval, TextLayer } from '../document/types'
 import {
+  applyCanvasLetterSpacing,
   canvasFont,
   ensureFont,
   FONT_CATALOG,
@@ -17,19 +18,32 @@ export type RankedFontCandidate = FontCandidate & {
   renderScore: number
   iou?: number
   edgeScore?: number
+  letterSpacing?: number
+}
+
+export type FontMatchCrop = {
+  image: ImageData
+  x: number
+  y: number
+  sourceWidth: number
+  sourceHeight: number
 }
 
 export const DEFAULT_OCR_FONT = 'Arial'
 
 const MODEL_RERANK_CAP = 12
+const MIN_GLYPH_INK = 4
+const MIN_GLYPH_INK_RATIO = 0.002
+const WEIGHT_NEIGHBOR_RANGE = 200
+const WEIGHT_NEIGHBOR_LIMIT = 2
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value))
 
-const systemFacesFor = (weight: number): FontCandidate[] =>
+const systemFacesFor = (weight: number, italic: boolean): FontCandidate[] =>
   FONT_CATALOG.filter((font) => font.source === 'system').map((font) => ({
     family: font.family,
     weight: nearestWeight(font.weights, weight),
-    italic: false,
+    italic,
     score: 0.05,
   }))
 
@@ -229,6 +243,110 @@ export const combinedRenderScore = (
   modelScore: number,
 ) => 0.55 * iou + 0.25 * edgeScore + 0.2 * modelScore
 
+export const maskInkCount = (mask: Uint8Array) => {
+  let count = 0
+  for (const bit of mask) {
+    if (bit) count += 1
+  }
+  return count
+}
+
+export const removalInkWidth = (removal: LayerRemoval) => {
+  const width = Math.max(1, Math.round(removal.bounds.width))
+  const height = Math.max(1, Math.round(removal.mask.length / width))
+  return inkBounds(removal.mask, width, height)?.width ?? 0
+}
+
+export const sampleRemovalMask = (
+  removal: LayerRemoval,
+  crop: {
+    x: number
+    y: number
+    sourceWidth: number
+    sourceHeight: number
+    width: number
+    height: number
+  },
+) => {
+  const mask = new Uint8Array(crop.width * crop.height)
+  if (
+    removal.mask.length === 0 ||
+    removal.bounds.width < 1 ||
+    removal.bounds.height < 1
+  ) {
+    return mask
+  }
+  const scaleX = crop.sourceWidth / Math.max(1, crop.width)
+  const scaleY = crop.sourceHeight / Math.max(1, crop.height)
+  for (let y = 0; y < crop.height; y += 1) {
+    const sourceY = crop.y + (y + 0.5) * scaleY
+    const localY = Math.floor(sourceY - removal.bounds.y)
+    if (localY < 0 || localY >= removal.bounds.height) continue
+    for (let x = 0; x < crop.width; x += 1) {
+      const sourceX = crop.x + (x + 0.5) * scaleX
+      const localX = Math.floor(sourceX - removal.bounds.x)
+      if (localX < 0 || localX >= removal.bounds.width) continue
+      if (removal.mask[localY * removal.bounds.width + localX]) {
+        mask[y * crop.width + x] = 1
+      }
+    }
+  }
+  return mask
+}
+
+export const targetInkMask = (layer: TextLayer, crop: FontMatchCrop) => {
+  const sampled = sampleRemovalMask(layer.removal, {
+    x: crop.x,
+    y: crop.y,
+    sourceWidth: crop.sourceWidth,
+    sourceHeight: crop.sourceHeight,
+    width: crop.image.width,
+    height: crop.image.height,
+  })
+  const minInk = Math.max(
+    MIN_GLYPH_INK,
+    Math.round(sampled.length * MIN_GLYPH_INK_RATIO),
+  )
+  if (maskInkCount(sampled) >= minInk) return sampled
+  return inkMask(crop.image)
+}
+
+export const neighborWeights = (weights: number[], weight: number) => {
+  if (weights.length === 0) return [weight]
+  const nearest = nearestWeight(weights, weight)
+  const extras = weights
+    .filter(
+      (candidate) =>
+        candidate !== nearest &&
+        Math.abs(candidate - nearest) <= WEIGHT_NEIGHBOR_RANGE,
+    )
+    .sort(
+      (left, right) =>
+        Math.abs(left - nearest) - Math.abs(right - nearest) || left - right,
+    )
+    .slice(0, WEIGHT_NEIGHBOR_LIMIT)
+  return [nearest, ...extras]
+}
+
+export const spacingGapsFor = (text: string) => {
+  let longest = 0
+  for (const line of text.split('\n')) {
+    longest = Math.max(longest, [...line].length)
+  }
+  return Math.max(1, longest - 1)
+}
+
+export const letterSpacingForWidth = (
+  targetWidth: number,
+  renderedWidth: number,
+  gaps: number,
+  maxAbs: number,
+) =>
+  clamp((targetWidth - renderedWidth) / Math.max(1, gaps), -maxAbs, maxAbs)
+
+export const letterSpacingToLayer = (spacing: number, cropScale: number) =>
+  cropScale <= 0 ? spacing : spacing / cropScale
+
 const inkExtent = (
   metrics: TextMetrics,
   fontSize: number,
@@ -253,19 +371,20 @@ const renderMask = async (
   width: number,
   height: number,
   target: Bounds,
-): Promise<Uint8Array | null> => {
+  letterSpacing = 0,
+): Promise<{ mask: Uint8Array; fontSize: number } | null> => {
   const font = fontByFamily(candidate.family)
   const weight = font ? nearestWeight(font.weights, candidate.weight) : candidate.weight
   try {
     await withTimeout(
-      ensureFont(candidate.family, weight),
+      ensureFont(candidate.family, weight, { italic: candidate.italic }),
       8000,
       `Timed out loading ${candidate.family}`,
     )
   } catch {
     return null
   }
-  if (isFontFailed(candidate.family, weight)) return null
+  if (isFontFailed(candidate.family, weight, candidate.italic)) return null
   const canvas = createCanvas(width, height)
   const context = contextFor(canvas)
   context.fillStyle = '#ffffff'
@@ -273,6 +392,7 @@ const renderMask = async (
   context.fillStyle = '#000000'
   context.textAlign = 'left'
   context.textBaseline = 'alphabetic'
+  applyCanvasLetterSpacing(context, letterSpacing)
 
   const lines = (text || ' ').split('\n')
   let fontSize = clamp(target.height / Math.max(1, lines.length) / 0.72, 6, 600)
@@ -309,13 +429,29 @@ const renderMask = async (
   for (let index = 0; index < mask.length; index += 1) {
     mask[index] = image.data[index * 4] < 192 ? 1 : 0
   }
-  return mask
+  return { mask, fontSize }
+}
+
+const expandNeighborWeights = (candidates: FontCandidate[]) => {
+  const expanded: FontCandidate[] = []
+  for (const candidate of candidates) {
+    const font = fontByFamily(candidate.family)
+    const weights = font
+      ? neighborWeights(font.weights, candidate.weight)
+      : [candidate.weight]
+    for (const weight of weights) {
+      expanded.push({ ...candidate, weight })
+    }
+  }
+  return collapseCandidates(expanded)
 }
 
 const rerankPool = (candidates: FontCandidate[]) => {
-  const model = collapseCandidates(candidates).slice(0, MODEL_RERANK_CAP)
+  const model = expandNeighborWeights(
+    collapseCandidates(candidates).slice(0, MODEL_RERANK_CAP),
+  )
   const seed = model[0]
-  const extras = systemFacesFor(seed?.weight ?? 700)
+  const extras = systemFacesFor(seed?.weight ?? 700, seed?.italic ?? false)
   const pooled = collapseCandidates([...model, ...extras])
   if (pooled.some((candidate) => candidate.family === DEFAULT_OCR_FONT)) {
     return pooled
@@ -325,28 +461,53 @@ const rerankPool = (candidates: FontCandidate[]) => {
     {
       family: DEFAULT_OCR_FONT,
       weight: seed?.weight ?? 700,
-      italic: false,
+      italic: seed?.italic ?? false,
       score: 0.05,
     },
   ]
 }
 
+const scoreRendered = (
+  candidate: FontCandidate,
+  rendered: Uint8Array,
+  target: Uint8Array,
+  targetEdges: Uint8Array,
+  width: number,
+  height: number,
+  letterSpacing: number,
+): RankedFontCandidate => {
+  const iou = maskIoU(target, rendered)
+  const edgeScore = maskIoU(
+    targetEdges,
+    edgeMask(rendered, width, height),
+  )
+  return {
+    ...candidate,
+    iou,
+    edgeScore,
+    letterSpacing,
+    renderScore: combinedRenderScore(iou, edgeScore, candidate.score),
+  }
+}
+
 export const rerankFontCandidates = async (
   layer: TextLayer,
-  crop: ImageData,
+  crop: FontMatchCrop,
   candidates: FontCandidate[],
 ) => {
   const collapsed = rerankPool(candidates)
   registerDetectedFonts(collapsed)
-  const target = inkMask(crop)
+  const target = targetInkMask(layer, crop)
+  const width = crop.image.width
+  const height = crop.image.height
   const targetBox =
-    inkBounds(target, crop.width, crop.height) ?? {
+    inkBounds(target, width, height) ?? {
       x: 0,
       y: 0,
-      width: crop.width,
-      height: crop.height,
+      width,
+      height,
     }
-  const targetEdges = edgeMask(target, crop.width, crop.height)
+  const targetEdges = edgeMask(target, width, height)
   const text = layer.originalText || layer.text
   const scored: RankedFontCandidate[] = []
   for (const entry of await Promise.all(
@@ -354,23 +515,21 @@ export const rerankFontCandidates = async (
       const rendered = await renderMask(
         text,
         candidate,
-        crop.width,
-        crop.height,
+        width,
+        height,
         targetBox,
       )
       if (!rendered) return null
-      const iou = maskIoU(target, rendered)
-      const edgeScore = maskIoU(
+      const first = scoreRendered(
+        candidate,
+        rendered.mask,
+        target,
         targetEdges,
-        edgeMask(rendered, crop.width, crop.height),
+        width,
+        height,
+        0,
       )
-      const ranked: RankedFontCandidate = {
-        ...candidate,
-        iou,
-        edgeScore,
-        renderScore: combinedRenderScore(iou, edgeScore, candidate.score),
-      }
-      return ranked
+      return first
     }),
   )) {
     if (entry) scored.push(entry)

@@ -1,5 +1,5 @@
 import type { TextLayer } from '../document/types'
-import { canvasFont } from './fonts'
+import { applyCanvasLetterSpacing, canvasFont } from './fonts'
 
 const lineOriginX = (alignment: CanvasTextAlign, width: number) => {
   if (alignment === 'center') return width / 2
@@ -33,6 +33,7 @@ export const drawLayerText = (
     typography.fontFamily,
     typography.italic,
   )
+  applyCanvasLetterSpacing(context, typography.letterSpacing)
   context.textAlign = typography.alignment
   context.textBaseline = 'alphabetic'
   const originX = lineOriginX(typography.alignment, bounds.width)

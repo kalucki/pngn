@@ -328,6 +328,19 @@ const backgroundTypeFor = (
   return 'complex'
 }
 
+const glyphInkWidth = (mask: Uint8Array, width: number, height: number) => {
+  let minX = width
+  let maxX = -1
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      if (!mask[y * width + x]) continue
+      minX = Math.min(minX, x)
+      maxX = Math.max(maxX, x)
+    }
+  }
+  return maxX < 0 ? 0 : maxX - minX + 1
+}
+
 const createLayer = (
   segmentation: GlyphSegmentation,
   method: ResolvedReconstructionMethod,
@@ -369,6 +382,11 @@ const createLayer = (
       reconstructionConfidence: reconstructionConfidence(segmentation, method),
       reconstructionMethod: method,
       backgroundType: backgroundTypeFor(segmentation),
+      originalInkWidth: glyphInkWidth(
+        segmentation.removalMask,
+        segmentation.width,
+        segmentation.height,
+      ),
     },
   }
 }

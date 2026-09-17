@@ -73,6 +73,7 @@ export type TextLayer = {
     reconstructionConfidence: number
     reconstructionMethod: ResolvedReconstructionMethod
     backgroundType: 'flat' | 'gradient' | 'complex'
+    originalInkWidth?: number
   }
 }
 

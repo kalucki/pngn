@@ -57,11 +57,18 @@ export const fallbackFontChoice = (
   layer: Pick<TextLayer, 'fontMatch'>,
   failedFamily: string,
   failedWeight: number,
+  failedItalic = false,
 ): FontChoice => {
   for (const choice of fontMatchChoices(layer)) {
     const next = normalizeChoice(choice)
-    if (next.family === failedFamily && next.weight === failedWeight) continue
-    if (isFontFailed(next.family, next.weight)) continue
+    if (
+      next.family === failedFamily &&
+      next.weight === failedWeight &&
+      next.italic === failedItalic
+    ) {
+      continue
+    }
+    if (isFontFailed(next.family, next.weight, next.italic)) continue
     return next
   }
   return arialFallback(failedWeight)

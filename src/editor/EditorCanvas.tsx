@@ -29,6 +29,7 @@ import {
 import { drawCanvasGrid } from './canvasGrid'
 import { readShowGrid, writeShowGrid } from './editorSession'
 import { GridToggleButton } from './GridToggleButton'
+import { LayerTextEditor } from './LayerTextEditor'
 import { ZoomResetButton } from './ZoomResetButton'
 import { useImageZoom } from './useImageZoom'
 
@@ -45,10 +46,11 @@ type EditorCanvasProps = {
     id: string | null,
     options?: { additive?: boolean },
   ) => void
-  onActivateLayer?: (id: string) => void
   onMoveLayer: (id: string, x: number, y: number) => void
   onRotateLayer: (id: string, rotation: number) => void
   onFontSizeLayer: (id: string, fontSize: number, bounds: Bounds) => void
+  onEditText?: (id: string, text: string) => void
+  onFitTextBounds?: () => void
   onRegionSelectionChange?: (selection: Bounds | null) => void
 }
 
@@ -125,10 +127,11 @@ export const EditorCanvas = ({
   interactionMode = 'edit',
   regionSelection = null,
   onSelectLayer,
-  onActivateLayer,
   onMoveLayer,
   onRotateLayer,
   onFontSizeLayer,
+  onEditText,
+  onFitTextBounds,
   onRegionSelectionChange,
 }: EditorCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -138,6 +141,7 @@ export const EditorCanvas = ({
   const regionStartRef = useRef<Point | null>(null)
   const layoutSizeRef = useRef({ width: 0, height: 0 })
   const [layoutSize, setLayoutSize] = useState({ width: 0, height: 0 })
+  const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
   const [showGrid, setShowGrid] = useState(readShowGrid)
   const { viewportRef, transform, contentStyle, resetZoom } = useImageZoom(
     documentKey,
@@ -145,6 +149,8 @@ export const EditorCanvas = ({
   )
   const transformRef = useRef(transform)
   const settledLayersRef = useRef(layers)
+  const editingLayer =
+    layers.find((layer) => layer.id === editingLayerId) ?? null
 
   const outlineMetrics = (layer: TextLayer, displayWidth: number) => {
     const pad =
@@ -384,12 +390,14 @@ export const EditorCanvas = ({
     void ensureFontsForLayers(layers)
       .catch(() => undefined)
       .then(() => {
-        if (!cancelled) draw()
+        if (cancelled) return
+        draw()
+        onFitTextBounds?.()
       })
     return () => {
       cancelled = true
     }
-  }, [draw, layers, regionSelection, selectedLayerIds])
+  }, [draw, layers, onFitTextBounds, regionSelection, selectedLayerIds])
 
   useLayoutEffect(() => {
     if (layoutSize.width <= 0) return
@@ -439,6 +447,13 @@ export const EditorCanvas = ({
     regionStartRef.current = null
     if (interactionMode === 'preview') dragRef.current = null
   }, [interactionMode])
+
+  if (
+    editingLayerId &&
+    (interactionMode !== 'edit' || !selectedLayerIds.includes(editingLayerId))
+  ) {
+    setEditingLayerId(null)
+  }
 
   useEffect(() => {
     if (interactionMode !== 'select-region') return
@@ -519,6 +534,7 @@ export const EditorCanvas = ({
   const handlePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const point = imagePoint(event)
     clickCandidateRef.current = null
+    if (editingLayerId) setEditingLayerId(null)
     if (interactionMode === 'preview') return
     if (interactionMode === 'select-region') {
       regionStartRef.current = point
@@ -679,7 +695,7 @@ export const EditorCanvas = ({
       if (clickCandidate.toggleIfClick) {
         onSelectLayer(clickCandidate.id, { additive: true })
       } else if (!clickCandidate.additive) {
-        onActivateLayer?.(clickCandidate.id)
+        setEditingLayerId(clickCandidate.id)
       }
     }
     updateCursor(event.currentTarget, point, null)
@@ -715,6 +731,19 @@ export const EditorCanvas = ({
         onPointerCancel={handlePointerUp}
         onPointerLeave={handlePointerLeave}
       />
+      {editingLayer && onEditText ? (
+        <LayerTextEditor
+          layer={editingLayer}
+          imageWidth={width}
+          imageHeight={height}
+          frameRef={canvasRef}
+          viewportRef={viewportRef}
+          transform={transform}
+          layoutSize={layoutSize}
+          onChange={(text) => onEditText(editingLayer.id, text)}
+          onExit={() => setEditingLayerId(null)}
+        />
+      ) : null}
       <div className="canvas-overlay-controls canvas-overlay-controls-start">
         <GridToggleButton pressed={showGrid} onToggle={handleToggleGrid} />
       </div>

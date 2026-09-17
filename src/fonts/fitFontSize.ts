@@ -1,5 +1,6 @@
 import type { Bounds } from '../document/types'
 import {
+  applyCanvasLetterSpacing,
   canvasFont,
   ensureFont,
   fontByFamily,
@@ -15,6 +16,8 @@ export { defaultOcrFontSize } from './ocrDefaults'
 const SAMPLE_SIZE = 100
 const MIN_FONT_SIZE = 4
 const MAX_FONT_SIZE = 600
+const MIN_TRACKING_EM = -0.03
+const MAX_TRACKING_EM = 0.35
 
 const clamp = (value: number, min: number, max: number) =>
   Math.max(min, Math.min(max, value))
@@ -96,7 +99,7 @@ export const fitFontSizeToBounds = async ({
   const font = fontByFamily(fontFamily)
   const weight = font ? nearestWeight(font.weights, fontWeight) : fontWeight
   try {
-    await ensureFont(fontFamily, weight)
+    await ensureFont(fontFamily, weight, { italic })
   } catch {
     // Measure with the fallback face if the file never arrives.
   }
@@ -119,4 +122,71 @@ export const fitFontSizeToBounds = async ({
     measureInkHeight(context, lines, fontSize),
     bounds.height,
   )
+}
+
+export const trackingForInkWidth = (
+  inkWidth: number,
+  renderedWidth: number,
+  gaps: number,
+  fontSize: number,
+) => {
+  if (inkWidth < 2 || renderedWidth < 1 || fontSize < 1) return 0
+  const spacing = (inkWidth - renderedWidth) / Math.max(1, gaps)
+  return clamp(spacing, fontSize * MIN_TRACKING_EM, fontSize * MAX_TRACKING_EM)
+}
+
+const measureInkWidth = (
+  context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  lines: string[],
+  fontSize: number,
+) => {
+  let width = 0
+  for (const line of lines) {
+    width = Math.max(width, visualTextSize(context.measureText(line), fontSize).width)
+  }
+  return width
+}
+
+export const fitLetterSpacingToInkWidth = async ({
+  text,
+  fontFamily,
+  fontWeight,
+  italic = false,
+  fontSize,
+  inkWidth,
+}: {
+  text: string
+  fontFamily: string
+  fontWeight: number
+  italic?: boolean
+  fontSize: number
+  inkWidth: number
+}) => {
+  if (inkWidth < 2 || fontSize < 1) return 0
+  const lines = text.split('\n').filter((line) => line.length > 0)
+  if (lines.length === 0) return 0
+
+  const font = fontByFamily(fontFamily)
+  const weight = font ? nearestWeight(font.weights, fontWeight) : fontWeight
+  try {
+    await ensureFont(fontFamily, weight, { italic })
+  } catch {
+    // Measure with the fallback face if the file never arrives.
+  }
+
+  const context = contextForFit()
+  if (!context) return 0
+  context.textAlign = 'left'
+  context.textBaseline = 'alphabetic'
+  applyCanvasLetterSpacing(context, 0)
+  context.font = canvasFont(weight, fontSize, fontFamily, italic)
+  const renderedWidth = measureInkWidth(context, lines, fontSize)
+  if (renderedWidth < 1) return 0
+
+  let longest = 0
+  for (const line of lines) {
+    longest = Math.max(longest, [...line].length)
+  }
+  const gaps = Math.max(1, longest - 1)
+  return trackingForInkWidth(inkWidth, renderedWidth, gaps, fontSize)
 }

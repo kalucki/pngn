@@ -4,14 +4,24 @@ import type {
   ProcessingOptions,
 } from '../document/types'
 
-export type ProcessingRequest = {
+export type ProcessingRunRequest = {
   type: 'process'
   requestId: string
+  // Stable per uploaded file so the worker can skip re-decoding the source
+  // image on every region: the client mints one id per file and reuses it
+  // for every selection processed against it.
+  imageId: string
   image: ArrayBuffer
   mimeType: string
   selection: Bounds
   options: ProcessingOptions
 }
+
+export type ProcessingWarmupRequest = {
+  type: 'warmup'
+}
+
+export type ProcessingRequest = ProcessingRunRequest | ProcessingWarmupRequest
 
 export type ProcessingSuccess = {
   type: 'success'

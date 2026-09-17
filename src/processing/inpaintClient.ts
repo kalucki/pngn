@@ -60,6 +60,13 @@ export const warmupInpaintWorker = () => {
   getWorker()
 }
 
+// Tells the worker to pre-build the ONNX session for this model. Call this
+// once the model's bytes are already in Cache Storage so it resolves from
+// cache with no network round trip.
+export const warmupInpaintModel = (model: NeuralInpaintModel) => {
+  getWorker().postMessage({ type: 'warmup', model })
+}
+
 // `mask` uses this app's convention: 255 = pixel to remove (hole), 0 = keep.
 // The worker converts polarity to whatever the chosen model expects.
 export const neuralInpaint = (
@@ -74,6 +81,7 @@ export const neuralInpaint = (
     const maskBuffer = mask.slice().buffer
     getWorker().postMessage(
       {
+        type: 'run',
         requestId,
         model,
         pixels,

@@ -3,7 +3,8 @@
 type OpenCvModule = typeof import('@techstark/opencv-js')
 type OpenCv = OpenCvModule
 
-type OpenCvRequest = {
+type OpenCvRunRequest = {
+  type: 'run'
   requestId: string
   pixels: ArrayBuffer
   mask: ArrayBuffer
@@ -12,6 +13,12 @@ type OpenCvRequest = {
   method: 'telea' | 'navier-stokes'
   radius: number
 }
+
+type OpenCvWarmupRequest = {
+  type: 'warmup'
+}
+
+type OpenCvRequest = OpenCvRunRequest | OpenCvWarmupRequest
 
 type OpenCvResponse =
   | { requestId: string; type: 'success'; pixels: ArrayBuffer }
@@ -29,7 +36,7 @@ const getOpenCv = () => {
   return ready
 }
 
-const processRequest = async (request: OpenCvRequest) => {
+const processRequest = async (request: OpenCvRunRequest) => {
   const cv = await getOpenCv()
   const crop = new ImageData(
     new Uint8ClampedArray(request.pixels),
@@ -79,9 +86,14 @@ const processRequest = async (request: OpenCvRequest) => {
 }
 
 self.onmessage = (event: MessageEvent<OpenCvRequest>) => {
-  void processRequest(event.data).catch((error: unknown) => {
+  if (event.data.type === 'warmup') {
+    void getOpenCv().catch(() => {})
+    return
+  }
+  const request = event.data
+  void processRequest(request).catch((error: unknown) => {
     const response: OpenCvResponse = {
-      requestId: event.data.requestId,
+      requestId: request.requestId,
       type: 'error',
       message: error instanceof Error ? error.message : 'OpenCV inpainting failed.',
     }

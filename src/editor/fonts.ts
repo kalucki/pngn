@@ -237,6 +237,7 @@ export type ParsedFontFace = {
   url: string
   unicodeRange?: string
   weight?: string
+  style?: string
 }
 
 const loadedFaces = new Map<string, Promise<void>>()
@@ -258,7 +259,8 @@ const SYSTEM_FALLBACKS: Record<string, string> = {
   Impact: 'Arial, sans-serif',
 }
 
-const fontCacheKey = (family: string, weight: number) => `${family}:${weight}`
+const fontCacheKey = (family: string, weight: number, italic = false) =>
+  `${family}:${weight}:${italic ? 'italic' : 'normal'}`
 
 const fallbackStack = (family: string) => {
   const font = fontByFamily(family)
@@ -321,17 +323,21 @@ export const nearestWeight = (weights: number[], weight: number) =>
       : closest,
   )
 
+export const cssFontFamily = (fontFamily: string) =>
+  `"${fontFamily.replaceAll('"', '\\"')}", ${fallbackStack(fontFamily)}`
+
 export const canvasFont = (
   fontWeight: number,
   fontSize: number,
   fontFamily: string,
   italic = false,
 ) =>
-  `${italic ? 'italic ' : ''}${fontWeight} ${fontSize}px "${fontFamily.replaceAll('"', '\\"')}", ${fallbackStack(fontFamily)}`
+  `${italic ? 'italic ' : ''}${fontWeight} ${fontSize}px ${cssFontFamily(fontFamily)}`
 
-export const googleCssUrl = (family: string, weight: number) => {
+export const googleCssUrl = (family: string, weight: number, italic = false) => {
   const familyParam = encodeURIComponent(family).replaceAll('%20', '+')
-  return `https://fonts.googleapis.com/css2?family=${familyParam}:wght@${weight}&display=swap`
+  const axis = italic ? `ital,wght@1,${weight}` : `wght@${weight}`
+  return `https://fonts.googleapis.com/css2?family=${familyParam}:${axis}&display=swap`
 }
 
 export const parseGoogleFontCss = (css: string): ParsedFontFace[] => {
@@ -345,6 +351,7 @@ export const parseGoogleFontCss = (css: string): ParsedFontFace[] => {
       url,
       unicodeRange: block.match(/unicode-range:\s*([^;]+)/)?.[1]?.trim(),
       weight: block.match(/font-weight:\s*([^;]+)/)?.[1]?.trim(),
+      style: block.match(/font-style:\s*([^;]+)/)?.[1]?.trim(),
     })
   }
   return faces
@@ -358,21 +365,30 @@ export const latinFontFaces = (faces: ParsedFontFace[]) => {
   return latin.length > 0 ? latin : faces
 }
 
-const loadGoogleFont = async (family: string, weight: number) => {
-  const response = await fetch(googleCssUrl(family, weight))
+const faceIsItalic = (style: string | undefined) => {
+  const value = (style ?? 'normal').toLowerCase()
+  return value === 'italic' || value === 'oblique'
+}
+
+const loadGoogleFont = async (family: string, weight: number, italic: boolean) => {
+  const response = await fetch(googleCssUrl(family, weight, italic))
   if (!response.ok) {
     throw new Error(`Could not fetch ${family} (${weight}) from Google Fonts.`)
   }
-  const faces = latinFontFaces(parseGoogleFontCss(await response.text()))
+  const faces = latinFontFaces(parseGoogleFontCss(await response.text())).filter(
+    (face) => faceIsItalic(face.style) === italic,
+  )
   if (faces.length === 0) {
-    throw new Error(`Google Fonts returned no files for ${family} (${weight}).`)
+    throw new Error(
+      `Google Fonts returned no ${italic ? 'italic' : 'roman'} files for ${family} (${weight}).`,
+    )
   }
 
   await Promise.all(
     faces.map(async (parsed) => {
       const face = new FontFace(family, `url(${parsed.url})`, {
         weight: String(weight),
-        style: 'normal',
+        style: italic ? 'italic' : 'normal',
         display: 'block',
         unicodeRange: parsed.unicodeRange,
       })
@@ -380,29 +396,33 @@ const loadGoogleFont = async (family: string, weight: number) => {
       document.fonts.add(face)
     }),
   )
-  await document.fonts.load(canvasFont(weight, 16, family))
+  await document.fonts.load(canvasFont(weight, 16, family, italic))
 }
 
-export const isFontReady = (family: string, weight: number) => {
+export const isFontReady = (family: string, weight: number, italic = false) => {
   const font = fontByFamily(family)
   if (!font || font.source !== 'google') return true
   return readyFaces.has(
-    fontCacheKey(font.family, nearestWeight(font.weights, weight)),
+    fontCacheKey(font.family, nearestWeight(font.weights, weight), italic),
   )
 }
 
-export const isFontFailed = (family: string, weight: number) => {
+export const isFontFailed = (family: string, weight: number, italic = false) => {
   const font = fontByFamily(family)
   if (!font || font.source !== 'google') return false
   return failedFaces.has(
-    fontCacheKey(font.family, nearestWeight(font.weights, weight)),
+    fontCacheKey(font.family, nearestWeight(font.weights, weight), italic),
   )
 }
 
-export const isFontSettled = (family: string, weight: number) =>
-  isFontReady(family, weight) || isFontFailed(family, weight)
+export const isFontSettled = (family: string, weight: number, italic = false) =>
+  isFontReady(family, weight, italic) || isFontFailed(family, weight, italic)
 
-type FontTypography = { fontFamily: string; fontWeight: number }
+type FontTypography = {
+  fontFamily: string
+  fontWeight: number
+  italic?: boolean
+}
 
 type FontLayer = {
   id: string
@@ -419,7 +439,11 @@ export const withSettledFonts = <T extends FontLayer>(
 ): T[] => {
   if (
     layers.every((layer) =>
-      isFontSettled(layer.typography.fontFamily, layer.typography.fontWeight),
+      isFontSettled(
+        layer.typography.fontFamily,
+        layer.typography.fontWeight,
+        Boolean(layer.typography.italic),
+      ),
     )
   ) {
     return layers
@@ -428,7 +452,11 @@ export const withSettledFonts = <T extends FontLayer>(
   const previousById = new Map(previous.map((layer) => [layer.id, layer]))
   return layers.map((layer) => {
     if (
-      isFontSettled(layer.typography.fontFamily, layer.typography.fontWeight)
+      isFontSettled(
+        layer.typography.fontFamily,
+        layer.typography.fontWeight,
+        Boolean(layer.typography.italic),
+      )
     ) {
       return layer
     }
@@ -436,7 +464,8 @@ export const withSettledFonts = <T extends FontLayer>(
     if (
       !prior ||
       (prior.typography.fontFamily === layer.typography.fontFamily &&
-        prior.typography.fontWeight === layer.typography.fontWeight)
+        prior.typography.fontWeight === layer.typography.fontWeight &&
+        Boolean(prior.typography.italic) === Boolean(layer.typography.italic))
     ) {
       return layer
     }
@@ -446,16 +475,24 @@ export const withSettledFonts = <T extends FontLayer>(
         ...layer.typography,
         fontFamily: prior.typography.fontFamily,
         fontWeight: prior.typography.fontWeight,
+        italic: prior.typography.italic,
       },
     }
   })
 }
 
+export type EnsureFontOptions = {
+  retry?: boolean
+  italic?: boolean
+}
+
 export const ensureFont = async (
   family: string,
   weight: number,
-  retry = false,
+  options: EnsureFontOptions = {},
 ) => {
+  const retry = options.retry ?? false
+  const italic = options.italic ?? false
   const resolved = resolveGoogleFontFamily(family)
   const font = fontByFamily(resolved?.family ?? family)
   if (!font || font.source !== 'google') return
@@ -465,7 +502,7 @@ export const ensureFont = async (
     weight,
   )
   const faceFamily = resolved?.family ?? font.family
-  const key = fontCacheKey(faceFamily, resolvedWeight)
+  const key = fontCacheKey(faceFamily, resolvedWeight, italic)
   if (!resolved) {
     failedFaces.add(key)
     return
@@ -480,7 +517,7 @@ export const ensureFont = async (
   const pending = loadedFaces.get(key)
   if (pending) return pending
 
-  const loading = loadGoogleFont(faceFamily, resolvedWeight)
+  const loading = loadGoogleFont(faceFamily, resolvedWeight, italic)
     .then(() => {
       readyFaces.add(key)
       failedFaces.delete(key)
@@ -494,10 +531,21 @@ export const ensureFont = async (
 }
 
 export const ensureFontsForLayers = (
-  layers: Array<{ typography: { fontFamily: string; fontWeight: number } }>,
+  layers: Array<{
+    typography: { fontFamily: string; fontWeight: number; italic?: boolean }
+  }>,
 ) =>
   Promise.all(
     layers.map((layer) =>
-      ensureFont(layer.typography.fontFamily, layer.typography.fontWeight),
+      ensureFont(layer.typography.fontFamily, layer.typography.fontWeight, {
+        italic: Boolean(layer.typography.italic),
+      }),
     ),
   )
+
+export const applyCanvasLetterSpacing = (
+  context: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
+  letterSpacing: number,
+) => {
+  context.letterSpacing = `${letterSpacing}px`
+}

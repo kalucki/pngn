@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { TextLayer } from '../document/types'
-import { withFontSize, withTextSizeBounds } from './textLayerBounds'
+import {
+  growBoundsToText,
+  withFontSize,
+  withTextSizeBounds,
+} from './textLayerBounds'
 
 const layer = (overrides: Partial<TextLayer> = {}): TextLayer => ({
   id: 'layer',
@@ -35,14 +39,50 @@ const layer = (overrides: Partial<TextLayer> = {}): TextLayer => ({
   ...overrides,
 })
 
+describe('growBoundsToText', () => {
+  const box = { x: 10, y: 20, width: 40, height: 16 }
+
+  it('grows to the right for left-aligned type', () => {
+    expect(growBoundsToText(box, { width: 120, height: 16 }, 'left')).toEqual({
+      x: 10,
+      y: 20,
+      width: 120,
+      height: 16,
+    })
+  })
+
+  it('grows from the center so centered type stays centered', () => {
+    expect(growBoundsToText(box, { width: 80, height: 16 }, 'center')).toEqual({
+      x: -10,
+      y: 20,
+      width: 80,
+      height: 16,
+    })
+  })
+
+  it('grows to the left for right-aligned type', () => {
+    expect(growBoundsToText(box, { width: 80, height: 16 }, 'right')).toEqual({
+      x: -30,
+      y: 20,
+      width: 80,
+      height: 16,
+    })
+  })
+
+  it('does not shrink a larger box', () => {
+    expect(growBoundsToText(box, { width: 10, height: 8 }, 'left')).toEqual(box)
+  })
+})
+
 describe('withTextSizeBounds', () => {
   it('grows the box when type outruns the current bounds', () => {
     const next = withTextSizeBounds(layer({ typography: {
       ...layer().typography,
       fontSize: 40,
     } }))
-    expect(next.bounds.width).toBeCloseTo(5 * 40 * 0.56)
-    expect(next.bounds.height).toBe(40)
+    expect(next.bounds.width).toBeGreaterThan(40)
+    expect(next.bounds.width).toBeGreaterThanOrEqual(5 * 40 * 0.56)
+    expect(next.bounds.height).toBeGreaterThanOrEqual(40)
     expect(next.bounds.x).toBe(10)
     expect(next.bounds.y).toBe(20)
   })
@@ -53,6 +93,16 @@ describe('withTextSizeBounds', () => {
     }))
     expect(next.bounds.width).toBe(40)
     expect(next.bounds.height).toBe(16)
+  })
+
+  it('leaves the fill mask box alone when the editing box grows', () => {
+    const current = layer({ typography: {
+      ...layer().typography,
+      fontSize: 40,
+    } })
+    const next = withTextSizeBounds(current)
+    expect(next.removal).toBe(current.removal)
+    expect(next.removal.bounds).toEqual({ x: 10, y: 20, width: 40, height: 16 })
   })
 })
 

@@ -49,6 +49,15 @@ export const warmupOpenCvWorker = () => {
   getWorker()
 }
 
+// Triggers the actual `@techstark/opencv-js` WASM import/compile. OpenCV is
+// only the fallback path (a failed neural inpaint, or an explicit classical
+// method), so this is called on file drop rather than at app mount, giving
+// it time to finish before it might be needed without loading it for every
+// visitor who never uploads an image.
+export const warmupOpenCvModule = () => {
+  getWorker().postMessage({ type: 'warmup' })
+}
+
 export const openCvInpaint = (
   crop: ImageData,
   mask: Uint8Array,
@@ -67,6 +76,7 @@ export const openCvInpaint = (
     const maskBuffer = mask.slice().buffer
     getWorker().postMessage(
       {
+        type: 'run',
         requestId,
         pixels,
         mask: maskBuffer,

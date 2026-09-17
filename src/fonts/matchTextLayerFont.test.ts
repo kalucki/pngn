@@ -5,11 +5,14 @@ import {
   cropPadFor,
   cropScaleFor,
   isDefaultOcrSize,
+  isDefaultOcrSpacing,
   isDefaultOcrTypography,
   isViableFontMatchLayer,
+  layerCropRect,
   markPendingFontMatches,
   mergeMatchedFontLayer,
 } from './matchTextLayerFont'
+import { withTextSizeBounds } from '../editor/textLayerBounds'
 
 const layer = (overrides: Partial<TextLayer> = {}): TextLayer => ({
   id: 'layer',
@@ -94,6 +97,13 @@ describe('font match layer filters', () => {
   it('keeps crop padding tight so glyphs fill the Storia letterbox', () => {
     expect(cropPadFor(24)).toBe(2)
     expect(cropPadFor(80)).toBe(8)
+    expect(layerCropRect(layer(), 200, 100)).toEqual({
+      x: 8,
+      y: 8,
+      width: 64,
+      height: 28,
+      scale: cropScaleFor(64, 28),
+    })
   })
 
   it('marks viable layers pending and recognizes default OCR typography', () => {
@@ -128,6 +138,7 @@ describe('font match layer filters', () => {
     expect(mergeMatchedFontLayer(pending!, matched).typography.fontFamily).toBe(
       'Roboto',
     )
+    expect(mergeMatchedFontLayer(pending!, matched).removal).toBe(pending!.removal)
   })
 
   it('keeps a newer pending request instead of a stale match', () => {
@@ -185,12 +196,42 @@ describe('font match layer filters', () => {
         status: 'ready' as const,
       },
     }
-    expect(mergeMatchedFontLayer(edited, matched)).toEqual({
-      ...matched,
+    expect(mergeMatchedFontLayer(edited, matched)).toEqual(
+      withTextSizeBounds({
+        ...matched,
+        typography: {
+          ...matched.typography,
+          fontSize: 40,
+        },
+      }),
+    )
+    expect(mergeMatchedFontLayer(edited, matched).removal).toBe(edited.removal)
+  })
+
+  it('keeps letter spacing the user picked while matching was pending', () => {
+    const [pending] = markPendingFontMatches([layer()])
+    const edited = {
+      ...pending!,
+      typography: { ...pending!.typography, letterSpacing: 2.5 },
+    }
+    const matched = {
+      ...pending!,
       typography: {
-        ...matched.typography,
-        fontSize: 40,
+        ...pending!.typography,
+        fontFamily: 'Roboto',
+        letterSpacing: 1.2,
       },
+      fontMatch: {
+        ...pending!.fontMatch!,
+        family: 'Roboto',
+        status: 'ready' as const,
+      },
+    }
+    expect(isDefaultOcrSpacing(pending!)).toBe(true)
+    expect(isDefaultOcrSpacing(edited)).toBe(false)
+    expect(mergeMatchedFontLayer(edited, matched).typography).toMatchObject({
+      fontFamily: 'Roboto',
+      letterSpacing: 2.5,
     })
   })
 })

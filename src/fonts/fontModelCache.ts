@@ -1,4 +1,5 @@
 import { ensureOnnxCached } from '../cacheOnnx'
+import { warmupFontIdSession } from './fontIdClient'
 import {
   FONT_MODEL_CACHE_NAME,
   STORIA_FONT_MODEL_MIN_BYTES,
@@ -13,7 +14,9 @@ export const prefetchFontIdModel = () => {
     FONT_MODEL_CACHE_NAME,
     storiaFontModelRequestUrl(),
     STORIA_FONT_MODEL_MIN_BYTES,
-  ).catch(() => {})
+  )
+    .then(() => warmupFontIdSession())
+    .catch(() => {})
   void inflight.finally(() => {
     inflight = null
   })

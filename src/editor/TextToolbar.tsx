@@ -27,7 +27,6 @@ type TextToolbarProps = {
   disabled?: boolean;
   onChange: (layer: TextLayer) => void;
   onStyleChange?: (patch: LayerStylePatch) => void;
-  textFocusKey?: number;
 };
 
 type FontStatus = "idle" | "loading";
@@ -67,12 +66,10 @@ export const TextToolbar = ({
   disabled = false,
   onChange,
   onStyleChange,
-  textFocusKey = 0,
 }: TextToolbarProps) => {
   const { t } = useLocale();
   const [fontEpoch, setFontEpoch] = useState(0);
   const [compact, setCompact] = useState(false);
-  const textAreaRef = useRef<HTMLTextAreaElement>(null);
   const groupRef = useRef<HTMLDivElement>(null);
   const layerRef = useRef(layer);
   const onChangeRef = useRef(onChange);
@@ -94,28 +91,39 @@ export const TextToolbar = ({
       ? layer.typography.fontWeight
       : nearestWeight(availableWeights, layer.typography.fontWeight)
     : 400;
+  const fontItalic = Boolean(layer?.typography.italic);
 
   useEffect(() => {
     if (!fontFamily || inactive) return;
-    if (isFontReady(fontFamily, fontWeight)) return;
+    if (isFontReady(fontFamily, fontWeight, fontItalic)) return;
     let cancelled = false;
-    void ensureFont(
-      fontFamily,
-      fontWeight,
-      isFontFailed(fontFamily, fontWeight),
-    ).then(() => {
+    void ensureFont(fontFamily, fontWeight, {
+      retry: isFontFailed(fontFamily, fontWeight, fontItalic),
+      italic: fontItalic,
+    }).then(() => {
       if (cancelled) return;
       setFontEpoch((epoch) => epoch + 1);
       const current = layerRef.current;
       if (
         !current ||
         current.typography.fontFamily !== fontFamily ||
-        !isFontFailed(fontFamily, fontWeight)
+        !isFontFailed(fontFamily, fontWeight, fontItalic)
       ) {
         return;
       }
-      const next = fallbackFontChoice(current, fontFamily, fontWeight);
-      if (next.family === fontFamily && next.weight === fontWeight) return;
+      const next = fallbackFontChoice(
+        current,
+        fontFamily,
+        fontWeight,
+        fontItalic,
+      );
+      if (
+        next.family === fontFamily &&
+        next.weight === fontWeight &&
+        next.italic === fontItalic
+      ) {
+        return;
+      }
       onChangeRef.current({
         ...current,
         typography: {
@@ -129,15 +137,7 @@ export const TextToolbar = ({
     return () => {
       cancelled = true;
     };
-  }, [fontFamily, fontWeight, inactive]);
-
-  useEffect(() => {
-    if (textFocusKey <= 0 || locked) return;
-    const frame = window.requestAnimationFrame(() => {
-      textAreaRef.current?.focus();
-    });
-    return () => window.cancelAnimationFrame(frame);
-  }, [locked, textFocusKey]);
+  }, [fontFamily, fontWeight, fontItalic, inactive]);
 
   useEffect(() => {
     const node = groupRef.current;
@@ -155,8 +155,8 @@ export const TextToolbar = ({
   const fontStatus: FontStatus =
     fontEpoch >= 0 &&
     layer &&
-    !isFontReady(fontFamily, fontWeight) &&
-    !isFontFailed(fontFamily, fontWeight)
+    !isFontReady(fontFamily, fontWeight, fontItalic) &&
+    !isFontFailed(fontFamily, fontWeight, fontItalic)
       ? "loading"
       : "idle";
   const fontMatchPending = layer?.fontMatch?.status === "pending";
@@ -176,21 +176,29 @@ export const TextToolbar = ({
 
   const detectedFamilies = layer?.fontMatch
     ? [
-        { family: layer.fontMatch.family, weight: layer.fontMatch.weight },
+        {
+          family: layer.fontMatch.family,
+          weight: layer.fontMatch.weight,
+          italic: layer.fontMatch.italic,
+        },
         ...layer.fontMatch.similar,
       ].filter(
         (font, index, fonts) =>
           font.family &&
-          !isFontFailed(font.family, font.weight) &&
+          !isFontFailed(font.family, font.weight, Boolean(font.italic)) &&
           fonts.findIndex((item) => item.family === font.family) === index,
       )
     : [];
-  const applyFontFamily = (family: string, weight?: number) => {
-    updateTypography(
-      weight === undefined
-        ? { fontFamily: family }
-        : { fontFamily: family, fontWeight: weight },
-    );
+  const applyFontFamily = (
+    family: string,
+    weight?: number,
+    italic?: boolean,
+  ) => {
+    updateTypography({
+      fontFamily: family,
+      ...(weight === undefined ? {} : { fontWeight: weight }),
+      ...(italic === undefined ? {} : { italic }),
+    });
   };
 
   const fontSelectData = [
@@ -230,7 +238,6 @@ export const TextToolbar = ({
       <label className="toolbar-field field-text">
         <span>{t("toolbar.text")}</span>
         <Textarea
-          ref={textAreaRef}
           size="xs"
           value={layer?.text ?? ""}
           disabled={locked}
@@ -271,12 +278,16 @@ export const TextToolbar = ({
               shadow: "md",
               withinPortal: true,
             }}
-            onChange={(value) => {
-              if (!value) return;
+            // onOptionSubmit (not onChange) so re-picking the font already
+            // shown still applies it: with multiple layers selected showing
+            // the primary layer's font, that value looks "unchanged" to
+            // Select even though the other selected layers use a different
+            // font, and onChange only fires on an actual value change.
+            onOptionSubmit={(value) => {
               const match = detectedFamilies.find(
                 (font) => font.family === value,
               );
-              applyFontFamily(value, match?.weight);
+              applyFontFamily(value, match?.weight, match?.italic);
             }}
           />
           <span className="font-match-slot" aria-hidden={!fontMatchPending}>
@@ -308,6 +319,31 @@ export const TextToolbar = ({
           onChange={(value) => {
             if (typeof value !== "number") return;
             updateTypography({ fontSize: value });
+          }}
+        />
+      </label>
+
+      <label className="toolbar-field field-spacing">
+        <span>{t("toolbar.letterSpacing")}</span>
+        <NumberInput
+          size="xs"
+          min={-80}
+          max={200}
+          step={0.5}
+          decimalScale={1}
+          allowDecimal
+          allowNegative
+          clampBehavior="blur"
+          disabled={locked}
+          aria-label={t("toolbar.letterSpacing")}
+          value={
+            layer
+              ? Math.round(layer.typography.letterSpacing * 10) / 10
+              : ""
+          }
+          onChange={(value) => {
+            if (typeof value !== "number") return;
+            updateTypography({ letterSpacing: value });
           }}
         />
       </label>

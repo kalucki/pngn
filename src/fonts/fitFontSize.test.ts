@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   defaultOcrFontSize,
   fontSizeFromMetrics,
+  trackingForInkWidth,
   visualTextSize,
 } from './fitFontSize'
 
@@ -50,5 +51,15 @@ describe('fontSizeFromMetrics', () => {
   it('clamps tiny and huge results', () => {
     expect(fontSizeFromMetrics(100, 10_000, 1)).toBe(4)
     expect(fontSizeFromMetrics(100, 1, 4000)).toBe(600)
+  })
+})
+
+describe('trackingForInkWidth', () => {
+  it('reopens gaps when the original ink is wider than the new face', () => {
+    expect(trackingForInkWidth(120, 80, 4, 40)).toBe(10)
+  })
+
+  it('barely tightens when the new face is wider than the original', () => {
+    expect(trackingForInkWidth(80, 120, 4, 40)).toBeCloseTo(40 * -0.03)
   })
 })

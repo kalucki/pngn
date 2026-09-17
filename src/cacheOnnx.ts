@@ -121,8 +121,26 @@ export const onnxObjectUrl = async (
   url: string,
   minBytes: number,
 ) => {
-  await ensureOnnxCached(cacheName, url, minBytes)
-  const cached = await (await openCache(cacheName))?.match(url)
+  const cache = await openCache(cacheName)
+  const cached = await cache?.match(url)
   if (cached) return URL.createObjectURL(await cached.blob())
-  return URL.createObjectURL(await blobFromNetwork(url, minBytes))
+  if (!cache) return URL.createObjectURL(await blobFromNetwork(url, minBytes))
+
+  // Nothing cached this yet (no prefetch ran, or it is still in flight in
+  // another realm). Fetch once and tee the stream: one side writes to Cache
+  // Storage for next time, the other is collected directly into the blob
+  // this call needs, so we never write the model to the cache and then turn
+  // around and read the same bytes straight back out of it.
+  const { response, body } = await fetchModelResponse(url, minBytes)
+  const [cacheSide, blobSide] = body.tee()
+  const putPromise = cache.put(url, clonedResponse(cacheSide, response)).catch(() => {
+    // Quota and private-mode puts fail after open() succeeds. The blob
+    // collected below still lets this call succeed from the network.
+  })
+  const [, blob] = await Promise.all([putPromise, new Response(blobSide).blob()])
+  if (blob.size < minBytes) {
+    await cache.delete(url)
+    throw new Error(`Hugging Face model was too small (${blob.size} bytes): ${url}`)
+  }
+  return URL.createObjectURL(blob)
 }

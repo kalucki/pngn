@@ -1,6 +1,6 @@
 import type { TextLayer } from '../document/types'
 import { useLocale } from '../i18n/useLocale'
-import { TrashIcon } from '../layout/icons'
+import { CheckIcon, TrashIcon } from '../layout/icons'
 
 type LayersPanelProps = {
   layers: TextLayer[]
@@ -49,6 +49,23 @@ export const LayersPanel = ({
               >
                 <button
                   type="button"
+                  className={`layer-checkbox${selected ? ' is-checked' : ''}`}
+                  aria-pressed={selected}
+                  disabled={disabled}
+                  aria-label={t('layers.select')}
+                  title={t('layers.select')}
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onSelectLayer(layer.id, {
+                      source: 'sidebar',
+                      additive: true,
+                    })
+                  }}
+                >
+                  {selected ? <CheckIcon size={11} /> : null}
+                </button>
+                <button
+                  type="button"
                   className="layer-item"
                   aria-pressed={selected}
                   disabled={disabled}
@@ -63,16 +80,18 @@ export const LayersPanel = ({
                     })
                   }
                 >
-                  <span className="layer-type" aria-hidden="true">
-                    T
-                  </span>
                   <span
                     className="layer-swatch"
                     style={{ background: layer.typography.color }}
                     aria-hidden="true"
                   />
                   <span className="layer-label">
-                    {layerLabel(layer, t('layers.fallback', { n: index }))}
+                    <span className="layer-label-text">
+                      {layerLabel(layer, t('layers.fallback', { n: index }))}
+                    </span>
+                    <span className="layer-font">
+                      {layer.typography.fontFamily}
+                    </span>
                   </span>
                 </button>
                 <button

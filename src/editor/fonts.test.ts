@@ -79,6 +79,9 @@ describe('font helpers', () => {
     expect(googleCssUrl('Shippori Mincho B1', 800)).toBe(
       'https://fonts.googleapis.com/css2?family=Shippori+Mincho+B1:wght@800&display=swap',
     )
+    expect(googleCssUrl('Open Sans', 700, true)).toBe(
+      'https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@1,700&display=swap',
+    )
   })
 
   it('keeps the previous face while a Google font is still loading', () => {
@@ -123,7 +126,7 @@ describe('ensureFont failures', () => {
       'fetch',
       vi.fn(() => Promise.resolve(new Response('unavailable', { status: 503 }))),
     )
-    await expect(ensureFont('Inter', 700, true)).resolves.toBeUndefined()
+    await expect(ensureFont('Inter', 700, { retry: true })).resolves.toBeUndefined()
     expect(isFontFailed('Inter', 700)).toBe(true)
   })
 
@@ -131,7 +134,7 @@ describe('ensureFont failures', () => {
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     registerDetectedFonts([{ family: 'New Candidate Font', weight: 700 }])
-    await expect(ensureFont('New Candidate Font', 700, true)).resolves.toBeUndefined()
+    await expect(ensureFont('New Candidate Font', 700, { retry: true })).resolves.toBeUndefined()
     expect(fetchMock).not.toHaveBeenCalled()
     expect(isFontFailed('New Candidate Font', 700)).toBe(true)
   })
@@ -163,13 +166,32 @@ describe('parseGoogleFontCss', () => {
         url: 'https://fonts.gstatic.com/s/inter/latin-ext.woff2',
         unicodeRange: 'U+0100-02BA, U+2020',
         weight: '400',
+        style: 'normal',
       },
       {
         url: 'https://fonts.gstatic.com/s/inter/latin.woff2',
         unicodeRange: 'U+0000-00FF, U+0131',
         weight: '400',
+        style: 'normal',
       },
     ])
+  })
+
+  it('keeps italic faces distinct from roman', () => {
+    const css = `
+@font-face {
+  font-family: 'Inter';
+  font-style: italic;
+  font-weight: 700;
+  src: url(https://fonts.gstatic.com/s/inter/italic.woff2) format('woff2');
+  unicode-range: U+0000-00FF;
+}
+`
+    expect(parseGoogleFontCss(css)[0]).toMatchObject({
+      url: 'https://fonts.gstatic.com/s/inter/italic.woff2',
+      style: 'italic',
+      weight: '700',
+    })
   })
 
   it('keeps latin and latin-ext faces only', () => {

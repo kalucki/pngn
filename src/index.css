@@ -677,7 +677,9 @@ output {
 .layer-row {
   display: flex;
   align-items: center;
+  gap: 0.35rem;
   min-width: 0;
+  padding-inline-start: 0.4rem;
   border: 1px solid transparent;
   border-radius: 0.3rem;
 }
@@ -686,6 +688,7 @@ output {
   flex: 1 1 auto;
   min-width: 0;
   width: auto;
+  padding-inline-start: 0;
   border: 0;
   border-radius: 0;
   box-shadow: none;
@@ -739,11 +742,30 @@ output {
 }
 
 .layer-label {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
+  min-width: 0;
+  gap: 0.1rem;
+}
+
+.layer-label-text {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.layer-font {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 0.62rem;
+  font-weight: 400;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.75;
 }
 
 .layer-delete {
@@ -770,19 +792,31 @@ output {
   opacity: 0.4;
 }
 
-.layer-type {
+.layer-checkbox {
   display: grid;
   width: 1.15rem;
   height: 1.15rem;
   flex: 0 0 auto;
   place-items: center;
   border: 1px solid var(--border-strong);
-  border-radius: 0.2rem;
+  border-radius: 0.25rem;
   background: var(--bg-raised);
-  color: var(--text);
-  font-size: 0.62rem;
-  font-weight: 800;
-  line-height: 1;
+  color: transparent;
+  padding: 0;
+}
+
+.layer-checkbox:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.layer-checkbox.is-checked {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.layer-checkbox:disabled {
+  opacity: 0.5;
 }
 
 .layer-swatch {
@@ -796,11 +830,6 @@ output {
 .layer-item.is-stale,
 .layer-row.is-stale {
   border-color: var(--accent);
-}
-
-.layer-item.is-stale .layer-type,
-.layer-row.is-stale .layer-type {
-  color: var(--accent);
 }
 
 .settings-apply-hint {
@@ -2105,6 +2134,10 @@ html.js #seo-prerender {
   width: 5.8rem;
 }
 
+.field-spacing {
+  width: 6.4rem;
+}
+
 .field-weight {
   min-width: 7.2rem;
 }
@@ -2419,6 +2452,31 @@ html.js #seo-prerender {
 
 .editor-canvas.selecting-region {
   cursor: crosshair;
+}
+
+.layer-text-overlay {
+  position: absolute;
+  z-index: 1;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  outline: none;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  box-sizing: border-box;
+  transform-origin: center center;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+.layer-text-overlay::selection {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  background: rgb(16 152 247 / 0.28);
 }
 
 @container editor-main (max-width: 840px) {

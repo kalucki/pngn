@@ -73,7 +73,7 @@ describe('fallbackFontChoice', () => {
       vi.fn(() => Promise.resolve(new Response('unavailable', { status: 503 }))),
     )
     registerDetectedFonts([{ family: 'Alef', weight: 700 }])
-    await ensureFont('Alef', 700, true)
+    await ensureFont('Alef', 700, { retry: true })
     expect(
       fallbackFontChoice(
         layer('Roboto', [
@@ -103,8 +103,8 @@ describe('fallbackFontChoice', () => {
       { family: 'Alef', weight: 700 },
       { family: 'Aboreto', weight: 400 },
     ])
-    await ensureFont('Alef', 700, true)
-    await ensureFont('Aboreto', 400, true)
+    await ensureFont('Alef', 700, { retry: true })
+    await ensureFont('Aboreto', 400, { retry: true })
     expect(
       fallbackFontChoice(
         layer('Alef', [{ family: 'Aboreto', weight: 400 }]),

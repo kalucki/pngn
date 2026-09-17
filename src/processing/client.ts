@@ -59,9 +59,17 @@ export const warmupProcessingWorker = () => {
   getWorker()
 }
 
+// Kicks off OCR session creation (fetch + WASM/WebGPU compile) as soon as an
+// image is dropped, so that cost lands while the user is still drawing their
+// first selection instead of blocking the first "process" call.
+export const warmupOcrModel = () => {
+  getWorker().postMessage({ type: 'warmup' } satisfies ProcessingRequest)
+}
+
 export const processImage = (
   image: ArrayBuffer,
   mimeType: string,
+  imageId: string,
   selection: Bounds,
   options: ProcessingOptions,
   onProgress: ProgressHandler,
@@ -72,6 +80,7 @@ export const processImage = (
     const request: ProcessingRequest = {
       type: 'process',
       requestId,
+      imageId,
       image,
       mimeType,
       selection,

@@ -14,6 +14,7 @@ import {
 import type {
   ProcessingRequest,
   ProcessingResponse,
+  ProcessingRunRequest,
 } from './messages'
 
 const MODEL_BASE = '/models/ocr/ppocr-v6-medium-v1'
@@ -88,6 +89,20 @@ const decodeImage = async (bytes: ArrayBuffer, mimeType: string) => {
   }
 }
 
+// "Select another area" processes the same source image over and over.
+// Keep the last decode around so only the first region in a session pays for
+// createImageBitmap + a full-image getImageData.
+let cachedImage:
+  | ({ id: string } & Awaited<ReturnType<typeof decodeImage>>)
+  | null = null
+
+const decodeOrReuseImage = async (request: ProcessingRunRequest) => {
+  if (cachedImage && cachedImage.id === request.imageId) return cachedImage
+  const decoded = await decodeImage(request.image, request.mimeType)
+  cachedImage = { id: request.imageId, ...decoded }
+  return cachedImage
+}
+
 const createOcrCrop = (
   source: OffscreenCanvas,
   crop: { x: number; y: number; width: number; height: number },
@@ -122,12 +137,12 @@ const createOcrCrop = (
   return { canvas, scale }
 }
 
-const processImage = async (request: ProcessingRequest) => {
+const processImage = async (request: ProcessingRunRequest) => {
   const startedAt = performance.now()
   progress(request.requestId, 'loading-models', 0.05)
   const [service, decoded] = await Promise.all([
     getService(),
-    decodeImage(request.image, request.mimeType),
+    decodeOrReuseImage(request),
   ])
   progress(request.requestId, 'ocr', 0.15)
 
@@ -218,10 +233,18 @@ const processImage = async (request: ProcessingRequest) => {
 }
 
 self.onmessage = (event: MessageEvent<ProcessingRequest>) => {
-  void processImage(event.data).catch((error: unknown) => {
+  if (event.data.type === 'warmup') {
+    // Fire-and-forget: starts fetching + compiling the OCR session during
+    // idle time between the file drop and the user's first submitted
+    // selection, instead of on the critical path of that first request.
+    void getService().catch(() => {})
+    return
+  }
+  const request = event.data
+  void processImage(request).catch((error: unknown) => {
     send({
       type: 'error',
-      requestId: event.data.requestId,
+      requestId: request.requestId,
       message: error instanceof Error ? error.message : 'Image processing failed.',
     })
   })

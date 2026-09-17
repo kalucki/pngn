@@ -14,13 +14,20 @@ import {
   type StoriaFontLabel,
 } from '../fonts/storiaLabels'
 
-type FontIdRequest = {
+type FontIdIdentifyRequest = {
+  type: 'identify'
   requestId: string
   pixels: ArrayBuffer
   width: number
   height: number
   topK?: number
 }
+
+type FontIdWarmupRequest = {
+  type: 'warmup'
+}
+
+type FontIdRequest = FontIdIdentifyRequest | FontIdWarmupRequest
 
 type FontIdResponse =
   | {
@@ -220,7 +227,7 @@ const runLogits = async (loaded: LoadedSession, input: Float32Array) => {
 }
 
 const processRequest = async (
-  request: FontIdRequest,
+  request: FontIdIdentifyRequest,
 ): Promise<FontIdResponse> => {
   const [loaded, labels] = await Promise.all([loadSession(), loadLabels()])
   const image = new ImageData(
@@ -258,17 +265,25 @@ const processRequest = async (
 let tail: Promise<void> = Promise.resolve()
 
 self.onmessage = (event: MessageEvent<FontIdRequest>) => {
+  if (event.data.type === 'warmup') {
+    // Fire-and-forget: builds the Storia ONNX session ahead of the first
+    // real font match request. Called once byte-prefetch has already warmed
+    // Cache Storage, so this only pays the compile cost.
+    void Promise.all([loadSession(), loadLabels()]).catch(() => {})
+    return
+  }
+  const request = event.data
   tail = tail
     .catch(() => undefined)
     .then(async () => {
       try {
-        self.postMessage(await processRequest(event.data))
+        self.postMessage(await processRequest(request))
       } catch (error: unknown) {
         const message =
           error instanceof Error ? error.message : 'Font matching failed.'
         console.warn('[pngn font] inference failed:', message)
         const response: FontIdResponse = {
-          requestId: event.data.requestId,
+          requestId: request.requestId,
           type: 'error',
           message,
         }

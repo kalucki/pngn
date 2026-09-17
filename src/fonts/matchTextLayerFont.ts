@@ -1,13 +1,16 @@
 import type { TextLayer } from '../document/types'
 import { fontByFamily, nearestWeight, registerDetectedFonts } from '../editor/fonts'
-import { fitFontSizeToBounds } from './fitFontSize'
+import { withTextSizeBounds } from '../editor/textLayerBounds'
+import { fitFontSizeToBounds, fitLetterSpacingToInkWidth } from './fitFontSize'
 import { identifyFont } from './fontIdClient'
 import { defaultOcrFontSize } from './ocrDefaults'
 import {
   autoApplyDecision,
   DEFAULT_OCR_FONT,
+  removalInkWidth,
   rerankFontCandidates,
   tightenToInk,
+  type FontMatchCrop,
 } from './rerankFont'
 import type { FontCandidate } from './storiaLabels'
 
@@ -56,6 +59,9 @@ export const isDefaultOcrSize = (layer: TextLayer) =>
   Math.abs(layer.typography.fontSize - defaultOcrFontSize(layer.bounds.height)) <
   0.05
 
+export const isDefaultOcrSpacing = (layer: TextLayer) =>
+  Math.abs(layer.typography.letterSpacing) < 0.05
+
 export const isDefaultOcrTypography = (layer: TextLayer) =>
   isDefaultOcrFont(layer) && isDefaultOcrSize(layer)
 
@@ -82,49 +88,78 @@ export const mergeMatchedFontLayer = (current: TextLayer, matched: TextLayer) =>
   if (pending && !isDefaultOcrFont(current)) {
     return { ...current, fontMatch: matched.fontMatch }
   }
+  const typography = { ...matched.typography }
   if (pending && !isDefaultOcrSize(current)) {
-    return {
-      ...matched,
-      typography: {
-        ...matched.typography,
-        fontSize: current.typography.fontSize,
-      },
-    }
+    typography.fontSize = current.typography.fontSize
   }
-  return matched
+  if (pending && !isDefaultOcrSpacing(current)) {
+    typography.letterSpacing = current.typography.letterSpacing
+  }
+  return withTextSizeBounds({ ...matched, typography })
 }
 
-const cropLayer = (bitmap: ImageBitmap, layer: TextLayer) => {
+export const layerCropRect = (
+  layer: Pick<TextLayer, 'bounds'>,
+  imageWidth: number,
+  imageHeight: number,
+) => {
   const pad = cropPadFor(layer.bounds.height)
   const x = Math.max(0, Math.floor(layer.bounds.x - pad))
   const y = Math.max(0, Math.floor(layer.bounds.y - pad))
-  const right = Math.min(bitmap.width, Math.ceil(layer.bounds.x + layer.bounds.width + pad))
-  const bottom = Math.min(bitmap.height, Math.ceil(layer.bounds.y + layer.bounds.height + pad))
+  const right = Math.min(
+    imageWidth,
+    Math.ceil(layer.bounds.x + layer.bounds.width + pad),
+  )
+  const bottom = Math.min(
+    imageHeight,
+    Math.ceil(layer.bounds.y + layer.bounds.height + pad),
+  )
   const width = Math.max(1, right - x)
   const height = Math.max(1, bottom - y)
-  const scale = cropScaleFor(width, height)
+  return {
+    x,
+    y,
+    width,
+    height,
+    scale: cropScaleFor(width, height),
+  }
+}
+
+const cropLayer = (bitmap: ImageBitmap, layer: TextLayer): FontMatchCrop => {
+  const rect = layerCropRect(layer, bitmap.width, bitmap.height)
   const canvas = document.createElement('canvas')
-  canvas.width = Math.max(1, Math.round(width * scale))
-  canvas.height = Math.max(1, Math.round(height * scale))
+  canvas.width = Math.max(1, Math.round(rect.width * rect.scale))
+  canvas.height = Math.max(1, Math.round(rect.height * rect.scale))
   const context = canvas.getContext('2d', { willReadFrequently: true })
   if (!context) throw new Error('Canvas 2D is unavailable in this browser.')
   context.imageSmoothingEnabled = true
   context.imageSmoothingQuality = 'high'
   context.drawImage(
     bitmap,
-    x,
-    y,
-    width,
-    height,
+    rect.x,
+    rect.y,
+    rect.width,
+    rect.height,
     0,
     0,
     canvas.width,
     canvas.height,
   )
-  return context.getImageData(0, 0, canvas.width, canvas.height)
+  return {
+    image: context.getImageData(0, 0, canvas.width, canvas.height),
+    x: rect.x,
+    y: rect.y,
+    sourceWidth: rect.width,
+    sourceHeight: rect.height,
+  }
 }
 
-const applyBestCandidate = (layer: TextLayer, family: string, weight: number, italic: boolean) => {
+const applyBestCandidate = (
+  layer: TextLayer,
+  family: string,
+  weight: number,
+  italic: boolean,
+) => {
   const font = fontByFamily(family)
   return {
     ...layer,
@@ -145,7 +180,9 @@ const withFittedSize = async (layer: TextLayer) => {
     italic: layer.typography.italic,
     bounds: layer.bounds,
   })
-  if (Math.abs(fontSize - layer.typography.fontSize) < 0.05) return layer
+  if (Math.abs(fontSize - layer.typography.fontSize) < 0.05) {
+    return layer
+  }
   console.info(
     LOG,
     `fit size "${layer.originalText.slice(0, 48)}" ${layer.typography.fontSize.toFixed(1)} → ${fontSize.toFixed(1)}`,
@@ -156,12 +193,39 @@ const withFittedSize = async (layer: TextLayer) => {
   }
 }
 
+const withOriginalSpacing = async (layer: TextLayer) => {
+  const inkWidth =
+    layer.processing.originalInkWidth ?? removalInkWidth(layer.removal)
+  const letterSpacing = await fitLetterSpacingToInkWidth({
+    text: layer.originalText || layer.text,
+    fontFamily: layer.typography.fontFamily,
+    fontWeight: layer.typography.fontWeight,
+    italic: layer.typography.italic,
+    fontSize: layer.typography.fontSize,
+    inkWidth,
+  })
+  if (Math.abs(letterSpacing - layer.typography.letterSpacing) < 0.05) {
+    return withTextSizeBounds(layer)
+  }
+  console.info(
+    LOG,
+    `restore tracking "${layer.originalText.slice(0, 48)}" ${layer.typography.letterSpacing.toFixed(1)} → ${letterSpacing.toFixed(1)} from ${inkWidth.toFixed(1)}px ink`,
+  )
+  return withTextSizeBounds({
+    ...layer,
+    typography: { ...layer.typography, letterSpacing },
+  })
+}
+
+const withFittedTypography = async (layer: TextLayer) =>
+  withOriginalSpacing(await withFittedSize(layer))
+
 const matchLayer = async (bitmap: ImageBitmap, layer: TextLayer) => {
   const label = `"${layer.originalText.slice(0, 48)}"`
   const skipped = skipReason(layer)
   if (skipped) {
     console.info(LOG, `skip ${label}: ${skipped} — keeping ${layer.typography.fontFamily}`)
-    return withFittedSize(
+    return withFittedTypography(
       attachMatch(layer, {
         family: layer.typography.fontFamily,
         weight: layer.typography.fontWeight,
@@ -175,11 +239,11 @@ const matchLayer = async (bitmap: ImageBitmap, layer: TextLayer) => {
 
   try {
     const crop = cropLayer(bitmap, layer)
-    const modelCrop = tightenToInk(crop)
+    const modelCrop = tightenToInk(crop.image)
     console.info(
       LOG,
-      `matching ${label} crop ${crop.width}×${crop.height}` +
-        (modelCrop !== crop
+      `matching ${label} crop ${crop.image.width}×${crop.image.height}` +
+        (modelCrop !== crop.image
           ? ` model ${modelCrop.width}×${modelCrop.height}`
           : '') +
         ` from ${layer.bounds.width.toFixed(1)}×${layer.bounds.height.toFixed(1)} OCR ${layer.processing.recognitionConfidence.toFixed(2)}`,
@@ -220,18 +284,23 @@ const matchLayer = async (bitmap: ImageBitmap, layer: TextLayer) => {
         LOG,
         `auto-apply ${label}: ${formatCandidate(best)} — ${decision.reason}`,
       )
-      return withFittedSize(
-        applyBestCandidate(matched, best.family, best.weight, best.italic),
+      return withFittedTypography(
+        applyBestCandidate(
+          matched,
+          best.family,
+          best.weight,
+          best.italic,
+        ),
       )
     }
     console.info(
       LOG,
       `keep ${layer.typography.fontFamily} for ${label}; suggested ${formatCandidate(best)} — ${decision.reason}`,
     )
-    return withFittedSize(matched)
+    return withFittedTypography(matched)
   } catch (error) {
     console.warn(LOG, `failed ${label}:`, error)
-    return withFittedSize(
+    return withFittedTypography(
       attachMatch(layer, {
         family: layer.typography.fontFamily,
         weight: layer.typography.fontWeight,

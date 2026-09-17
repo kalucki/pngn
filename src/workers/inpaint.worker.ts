@@ -16,7 +16,8 @@ import {
   inpaintModelRequestUrl,
 } from '../processing/modelAssets'
 
-type InpaintRequest = {
+type InpaintRunRequest = {
+  type: 'run'
   requestId: string
   model: NeuralInpaintModel
   pixels: ArrayBuffer
@@ -24,6 +25,13 @@ type InpaintRequest = {
   width: number
   height: number
 }
+
+type InpaintWarmupRequest = {
+  type: 'warmup'
+  model: NeuralInpaintModel
+}
+
+type InpaintRequest = InpaintRunRequest | InpaintWarmupRequest
 
 type InpaintResponse =
   | {
@@ -451,7 +459,7 @@ const infer = async (
 }
 
 const processRequest = async (
-  request: InpaintRequest,
+  request: InpaintRunRequest,
 ): Promise<InpaintResponse> => {
   const spec = MODEL_SPECS[request.model]
   const crop = new ImageData(
@@ -473,14 +481,27 @@ const processRequest = async (
 }
 
 self.onmessage = (event: MessageEvent<InpaintRequest>) => {
-  void processRequest(event.data)
+  if (event.data.type === 'warmup') {
+    // Fire-and-forget: builds the ONNX session (WASM/WebGPU graph compile)
+    // for this model ahead of time. Called once byte-prefetch has already
+    // populated Cache Storage, so this hits the cache with no network call
+    // and only pays the compile cost, overlapping it with the user drawing
+    // their first selection.
+    const model = event.data.model
+    void preferredProvider(model)
+      .then((provider) => loadSession(model, provider))
+      .catch(() => {})
+    return
+  }
+  const request = event.data
+  void processRequest(request)
     .then((response) => {
       const transfer = response.type === 'success' ? [response.pixels] : []
       self.postMessage(response, { transfer })
     })
     .catch((error: unknown) => {
       const response: InpaintResponse = {
-        requestId: event.data.requestId,
+        requestId: request.requestId,
         type: 'error',
         message:
           error instanceof Error ? error.message : 'Neural inpainting failed.',

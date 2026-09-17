@@ -1,5 +1,5 @@
 import { Select, Slider, Tooltip } from "@mantine/core";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   Bounds,
   NeuralInpaintModel,
@@ -25,7 +25,7 @@ import {
   matchTextLayerFonts,
   mergeMatchedFontLayer,
 } from "./fonts/matchTextLayerFont";
-import { withTextSizeBounds } from "./editor/textLayerBounds";
+import { fitLayersTextBounds, withTextSizeBounds } from "./editor/textLayerBounds";
 import { applyLayerStylePatch, type LayerStylePatch } from "./editor/applyLayerStyle";
 import { nextSelectedLayerIds } from "./editor/layerSelection";
 import {
@@ -59,10 +59,17 @@ import {
   RestartIcon,
 } from "./layout/icons";
 import { EXPORT_PATH, navigate } from "./navigation";
-import { processImage, warmupProcessingWorker } from "./processing/client";
+import {
+  processImage,
+  warmupOcrModel,
+  warmupProcessingWorker,
+} from "./processing/client";
 import { warmupInpaintWorker } from "./processing/inpaintClient";
 import { prefetchInpaintModel } from "./processing/modelCache";
-import { warmupOpenCvWorker } from "./processing/openCvClient";
+import {
+  warmupOpenCvModule,
+  warmupOpenCvWorker,
+} from "./processing/openCvClient";
 import { useLocale } from "./i18n/useLocale";
 import type { MessageKey } from "./i18n/messages";
 
@@ -85,7 +92,7 @@ type RunConfig = {
 
 type LayerSelectSource = "sidebar" | "canvas";
 
-type ReconstructionChoice = "auto" | NeuralInpaintModel;
+type ReconstructionChoice = "auto" | "flat" | NeuralInpaintModel;
 
 const initialOptions: ProcessingOptions = {
   method: "auto",
@@ -106,10 +113,10 @@ const reconstructionMethods: {
     hintAria: "app.methodAutoHintAria",
   },
   {
-    value: "lama",
-    label: "app.methodLama",
-    hint: "app.methodLamaHint",
-    hintAria: "app.methodLamaHintAria",
+    value: "flat",
+    label: "app.methodFlat",
+    hint: "app.methodFlatHint",
+    hintAria: "app.methodFlatHintAria",
   },
   {
     value: "migan",
@@ -117,11 +124,26 @@ const reconstructionMethods: {
     hint: "app.methodMiganHint",
     hintAria: "app.methodMiganHintAria",
   },
+  {
+    value: "lama",
+    label: "app.methodLama",
+    hint: "app.methodLamaHint",
+    hintAria: "app.methodLamaHintAria",
+  },
 ];
 
 const neuralModelFor = (
   method: ProcessingOptions["method"],
-): NeuralInpaintModel => (method === "migan" ? "migan" : "lama");
+): NeuralInpaintModel | null => {
+  if (method === "migan") return "migan";
+  if (method === "lama" || method === "auto") return "lama";
+  return null;
+};
+
+const prefetchForMethod = (method: ProcessingOptions["method"]) => {
+  const model = neuralModelFor(method);
+  if (model) prefetchInpaintModel(model);
+};
 
 const canvasToPng = (canvas: HTMLCanvasElement) =>
   new Promise<Blob>((resolve, reject) => {
@@ -214,7 +236,6 @@ export const App = () => {
   const [selection, setSelection] = useState<Bounds | null>(null);
   const [options, setOptions] = useState<ProcessingOptions>(initialOptions);
   const [selectedLayerIds, setSelectedLayerIds] = useState<string[]>([]);
-  const [textFocusKey, setTextFocusKey] = useState(0);
   const [progress, setProgress] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -235,6 +256,10 @@ export const App = () => {
   const isProcessingRef = useRef(isProcessing);
   const removeLayerChainRef = useRef(Promise.resolve());
   const requestApplyToLayerRef = useRef<(layerId: string) => void>(() => {});
+  // Identifies the current file to the processing worker so it can reuse its
+  // decoded source image across every region instead of re-decoding it each
+  // time "Select another area" is used.
+  const imageIdRef = useRef("");
 
   const selectedLayerId = selectedLayerIds[0] ?? null;
   const selectedLayer = useMemo(
@@ -295,6 +320,7 @@ export const App = () => {
       const processed = await processImage(
         await file.arrayBuffer(),
         file.type,
+        imageIdRef.current,
         activeSelection,
         activeOptions,
         (_nextStage, nextProgress) => {
@@ -319,7 +345,9 @@ export const App = () => {
         processed.textLayers,
         regionId,
       );
-      const nextRegionLayers = markPendingFontMatches(adoptedRegionLayers);
+      const nextRegionLayers = markPendingFontMatches(adoptedRegionLayers).map(
+        withTextSizeBounds,
+      );
       const nextRegion: ProcessedRegion = {
         id: regionId,
         selection: activeSelection,
@@ -515,7 +543,7 @@ export const App = () => {
       ...current,
       method,
     }));
-    prefetchInpaintModel(neuralModelFor(method));
+    prefetchForMethod(method);
   };
 
   const requestProcessing = () => {
@@ -538,10 +566,13 @@ export const App = () => {
         height: bitmap.height,
       };
       bitmap.close();
+      imageIdRef.current = crypto.randomUUID();
       setFile(nextFile);
       setSource(nextSource);
-      prefetchInpaintModel(neuralModelFor(options.method));
+      prefetchForMethod(options.method);
       prefetchFontIdModel();
+      warmupOcrModel();
+      warmupOpenCvModule();
       resetToUploadedImage();
     } catch {
       setError("This image could not be decoded by the browser.");
@@ -571,6 +602,18 @@ export const App = () => {
       ),
     );
   };
+
+  const editLayerText = (id: string, text: string) => {
+    setLayers((current) =>
+      current.map((layer) =>
+        layer.id === id ? withTextSizeBounds({ ...layer, text }) : layer,
+      ),
+    );
+  };
+
+  const fitTextLayerBounds = useCallback(() => {
+    setLayers((current) => fitLayersTextBounds(current));
+  }, []);
 
   const updateSelectedLayerStyle = (patch: LayerStylePatch) => {
     const ids = selectedLayerIdsRef.current;
@@ -615,10 +658,6 @@ export const App = () => {
     if (source === "sidebar" && id && !additive) {
       requestApplyToLayer(id);
     }
-  };
-
-  const handleActivateLayer = () => {
-    setTextFocusKey((key) => key + 1);
   };
 
   const moveLayer = (id: string, x: number, y: number) => {
@@ -866,6 +905,7 @@ export const App = () => {
           hiddenInputProps={{ className: "reconstruction-method" }}
           value={
             options.method === "auto" ||
+            options.method === "flat" ||
             options.method === "lama" ||
             options.method === "migan"
               ? options.method
@@ -904,7 +944,12 @@ export const App = () => {
             );
           }}
           onChange={(value) => {
-            if (value === "auto" || value === "migan" || value === "lama") {
+            if (
+              value === "auto" ||
+              value === "flat" ||
+              value === "migan" ||
+              value === "lama"
+            ) {
               requestMethod(value);
             }
           }}
@@ -1104,7 +1149,6 @@ export const App = () => {
                   disabled={isProcessing}
                   onChange={updateLayer}
                   onStyleChange={updateSelectedLayerStyle}
-                  textFocusKey={textFocusKey}
                 />
               </div>
             ) : null}
@@ -1139,10 +1183,11 @@ export const App = () => {
                   }
                   regionSelection={selection}
                   onSelectLayer={handleSelectLayer}
-                  onActivateLayer={handleActivateLayer}
                   onMoveLayer={moveLayer}
                   onRotateLayer={rotateLayer}
                   onFontSizeLayer={setLayerFontSize}
+                  onEditText={editLayerText}
+                  onFitTextBounds={fitTextLayerBounds}
                   onRegionSelectionChange={setSelection}
                 />
               )}

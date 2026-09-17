@@ -180,6 +180,13 @@ describe('applyLayerStylePatch', () => {
     expect(other.typography.strokeWidth).toBe(4)
   })
 
+  it('applies letter spacing', () => {
+    const next = applyLayerStylePatch(layer({ id: 'a' }), {
+      typography: { letterSpacing: 4 },
+    })
+    expect(next.typography.letterSpacing).toBe(4)
+  })
+
   it('applies opacity without touching typography', () => {
     const current = layer({ id: 'a' })
     const next = applyLayerStylePatch(current, { effects: { opacity: 0.4 } })
