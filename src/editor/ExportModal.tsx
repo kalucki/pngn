@@ -6,6 +6,7 @@ const exportFormats: { value: ExportFormat; label: string }[] = [
   { value: "image/png", label: "PNG" },
   { value: "image/jpeg", label: "JPEG" },
   { value: "image/webp", label: "WebP" },
+  { value: "image/avif", label: "AVIF" },
 ];
 
 type ExportModalProps = {
@@ -14,6 +15,12 @@ type ExportModalProps = {
   isExporting: boolean;
   onClose: () => void;
   onFormatChange: (format: ExportFormat) => void;
+  outputWidth?: number;
+  outputHeight?: number;
+  targetKb?: number;
+  onOutputWidthChange?: (width: number) => void;
+  onOutputHeightChange?: (height: number) => void;
+  onTargetKbChange?: (targetKb: number) => void;
   onExport: () => void;
 };
 
@@ -23,6 +30,12 @@ export const ExportModal = ({
   isExporting,
   onClose,
   onFormatChange,
+  outputWidth,
+  outputHeight,
+  targetKb,
+  onOutputWidthChange,
+  onOutputHeightChange,
+  onTargetKbChange,
   onExport,
 }: ExportModalProps) => {
   const { t } = useLocale();
@@ -54,6 +67,46 @@ export const ExportModal = ({
           onChange={(value) => {
             if (value) onFormatChange(value as ExportFormat);
           }}
+        />
+      </label>
+      <div className="export-modal-grid">
+        <label className="export-modal-field">
+          <span>Width</span>
+          <input
+            className="plain-input"
+            type="number"
+            min={1}
+            disabled={isExporting}
+            value={outputWidth ?? ""}
+            onChange={(event) =>
+              onOutputWidthChange?.(Math.max(1, Number(event.target.value) || 1))
+            }
+          />
+        </label>
+        <label className="export-modal-field">
+          <span>Height</span>
+          <input
+            className="plain-input"
+            type="number"
+            min={1}
+            disabled={isExporting}
+            value={outputHeight ?? ""}
+            onChange={(event) =>
+              onOutputHeightChange?.(Math.max(1, Number(event.target.value) || 1))
+            }
+          />
+        </label>
+      </div>
+      <label className="export-modal-field">
+        <span>Target size (KB, optional)</span>
+        <input
+          className="plain-input"
+          type="number"
+          min={0}
+          disabled={isExporting || format === "image/png"}
+          value={targetKb ?? ""}
+          placeholder="auto"
+          onChange={(event) => onTargetKbChange?.(Number(event.target.value) || 0)}
         />
       </label>
       <div className="export-modal-actions">

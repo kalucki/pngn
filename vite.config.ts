@@ -1,4 +1,13 @@
-import { createReadStream, existsSync, globSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  createReadStream,
+  existsSync,
+  globSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -168,6 +177,25 @@ const rootHrefFallback = (): Plugin => ({
   },
 })
 
+// GitHub Pages has no SPA fallback. /edit has to be a real file or a refresh
+// while editing 404s. The shell is the built app with the landing copy removed.
+const editorShell = (): Plugin => ({
+  name: 'editor-shell',
+  apply: 'build',
+  closeBundle() {
+    const indexPath = join(distDir, 'index.html')
+    if (!existsSync(indexPath)) return
+    const html = readFileSync(indexPath, 'utf8')
+      .replace(
+        'name="robots" content="index, follow"',
+        'name="robots" content="noindex, nofollow"',
+      )
+      .replace(/<article id="seo-prerender">[\s\S]*?<\/article>\s*/, '')
+    mkdirSync(join(distDir, 'edit'), { recursive: true })
+    writeFileSync(join(distDir, 'edit', 'index.html'), html)
+  },
+})
+
 const omitPublicOnnx = (): Plugin => ({
   name: 'omit-public-onnx',
   apply: 'build',
@@ -191,6 +219,7 @@ export default defineConfig(({ mode }) => {
       react(),
       serveModelFiles(),
       seoFiles(siteOrigin),
+      editorShell(),
       omitPublicOnnx(),
     ],
     worker: {

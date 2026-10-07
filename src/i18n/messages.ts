@@ -35,6 +35,11 @@ export const en = {
   "app.restart": "Restart",
   "app.dragHint":
     "Drag a box around the text you want to change. Scroll to zoom.",
+  "app.cropHint":
+    "Drag a box around the part you want to keep, then crop. Scroll to zoom.",
+  "app.eraseHint": "Paint over what you want to remove. Scroll to zoom.",
+  "app.backgroundHint":
+    "Remove the background, or pick a colour and replace it.",
   "app.editSelected": "Edit selected text",
   "app.processing": "Processing…",
   "app.cancel": "Cancel",
@@ -228,6 +233,10 @@ const es = catalog({
   "app.restart": "Reiniciar",
   "app.dragHint":
     "Arrastra un recuadro alrededor del texto que quieres cambiar. Desplázate para ampliar.",
+  "app.cropHint":
+    "Arrastra un recuadro alrededor de la parte que quieres conservar y recorta. Desplázate para ampliar.",
+  "app.eraseHint": "Pinta sobre lo que quieres quitar. Desplázate para ampliar.",
+  "app.backgroundHint": "Quita el fondo, o elige un color y sustitúyelo.",
   "app.editSelected": "Editar el texto seleccionado",
   "app.processing": "Procesando…",
   "app.cancel": "Cancelar",
@@ -418,6 +427,10 @@ const pl = catalog({
   "app.restart": "Od nowa",
   "app.dragHint":
     "Przeciągnij ramkę wokół tekstu, który chcesz zmienić. Przewiń, aby powiększyć.",
+  "app.cropHint":
+    "Przeciągnij ramkę wokół fragmentu, który chcesz zostawić, i przytnij. Przewiń, aby powiększyć.",
+  "app.eraseHint": "Zamaluj to, co chcesz usunąć. Przewiń, aby powiększyć.",
+  "app.backgroundHint": "Usuń tło albo wybierz kolor i podmień je.",
   "app.editSelected": "Edytuj zaznaczony tekst",
   "app.processing": "Przetwarzanie…",
   "app.cancel": "Anuluj",
@@ -604,6 +617,9 @@ const zh = catalog({
   "app.newImage": "新图片",
   "app.restart": "重新开始",
   "app.dragHint": "在要修改的文字周围拖出一个框。滚动可缩放。",
+  "app.cropHint": "在要保留的部分周围拖出一个框，然后裁剪。滚动可缩放。",
+  "app.eraseHint": "在要去除的地方涂抹。滚动可缩放。",
+  "app.backgroundHint": "去除背景，或选一个颜色来替换。",
   "app.editSelected": "编辑所选文字",
   "app.processing": "处理中…",
   "app.cancel": "取消",
@@ -785,6 +801,10 @@ const pcm = catalog({
   "app.restart": "Start again",
   "app.dragHint":
     "Drag box around the writing wey you wan change. Scroll make e zoom.",
+  "app.cropHint":
+    "Drag box around the part wey you wan keep, den crop. Scroll make e zoom.",
+  "app.eraseHint": "Paint on top of wetin you wan remove. Scroll make e zoom.",
+  "app.backgroundHint": "Remove the background, or pick colour and replace am.",
   "app.editSelected": "Change the writing wey you select",
   "app.processing": "E dey process…",
   "app.cancel": "Cancel",
@@ -971,6 +991,10 @@ const ar = catalog({
   "app.newImage": "صورة جديدة",
   "app.restart": "إعادة البدء",
   "app.dragHint": "اسحب مربعًا حول النص الذي تريد تغييره. مرّر للتكبير.",
+  "app.cropHint":
+    "اسحب مربعًا حول الجزء الذي تريد الإبقاء عليه، ثم قص. مرّر للتكبير.",
+  "app.eraseHint": "ارسم فوق ما تريد إزالته. مرّر للتكبير.",
+  "app.backgroundHint": "أزل الخلفية، أو اختر لونًا واستبدلها.",
   "app.editSelected": "تعديل النص المحدد",
   "app.processing": "جارٍ المعالجة…",
   "app.cancel": "إلغاء",

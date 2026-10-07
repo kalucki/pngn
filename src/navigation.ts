@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
-import { EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH } from './paths'
+import { BATCH_PATH, EDITOR_PATH, EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH } from './paths'
 
-export { EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH }
+export { BATCH_PATH, EDITOR_PATH, EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH }
 
 export const normalizePath = (path: string) => path.replace(/\/+$/, '') || '/'
 
 const getPath = () => normalizePath(window.location.pathname)
 
-export const navigate = (to: string) => {
+export const navigate = (to: string, options?: { replace?: boolean }) => {
   if (normalizePath(to) === getPath()) return
-  window.history.pushState({}, '', to)
+  const update = options?.replace ? window.history.replaceState : window.history.pushState
+  update.call(window.history, {}, '', to)
   window.dispatchEvent(new PopStateEvent('popstate'))
 }
 

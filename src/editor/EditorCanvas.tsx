@@ -40,8 +40,9 @@ type EditorCanvasProps = {
   height: number
   layers: TextLayer[]
   selectedLayerIds: string[]
-  interactionMode?: 'edit' | 'select-region' | 'preview'
+  interactionMode?: 'edit' | 'select-region' | 'preview' | 'erase'
   regionSelection?: Bounds | null
+  eraserSize?: number
   onSelectLayer: (
     id: string | null,
     options?: { additive?: boolean },
@@ -52,6 +53,7 @@ type EditorCanvasProps = {
   onEditText?: (id: string, text: string) => void
   onFitTextBounds?: () => void
   onRegionSelectionChange?: (selection: Bounds | null) => void
+  onEraseMask?: (stroke: { bounds: Bounds; mask: Uint8Array }) => void
 }
 
 type DragState =
@@ -126,6 +128,7 @@ export const EditorCanvas = ({
   selectedLayerIds,
   interactionMode = 'edit',
   regionSelection = null,
+  eraserSize = 36,
   onSelectLayer,
   onMoveLayer,
   onRotateLayer,
@@ -133,12 +136,14 @@ export const EditorCanvas = ({
   onEditText,
   onFitTextBounds,
   onRegionSelectionChange,
+  onEraseMask,
 }: EditorCanvasProps) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const dragRef = useRef<DragState | null>(null)
   const clickCandidateRef = useRef<ClickCandidate | null>(null)
   const regionStartRef = useRef<Point | null>(null)
+  const eraserDraftRef = useRef<Point[] | null>(null)
   const layoutSizeRef = useRef({ width: 0, height: 0 })
   const [layoutSize, setLayoutSize] = useState({ width: 0, height: 0 })
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
@@ -151,6 +156,50 @@ export const EditorCanvas = ({
   const settledLayersRef = useRef(layers)
   const editingLayer =
     layers.find((layer) => layer.id === editingLayerId) ?? null
+
+  const eraseMaskFromPoints = (points: Point[]) => {
+    const radius = eraserSize / 2
+    const minX = Math.max(0, Math.floor(Math.min(...points.map((point) => point.x)) - radius - 2))
+    const minY = Math.max(0, Math.floor(Math.min(...points.map((point) => point.y)) - radius - 2))
+    const maxX = Math.min(width, Math.ceil(Math.max(...points.map((point) => point.x)) + radius + 2))
+    const maxY = Math.min(height, Math.ceil(Math.max(...points.map((point) => point.y)) + radius + 2))
+    const bounds = {
+      x: minX,
+      y: minY,
+      width: Math.max(1, maxX - minX),
+      height: Math.max(1, maxY - minY),
+    }
+    const maskCanvas = document.createElement('canvas')
+    maskCanvas.width = bounds.width
+    maskCanvas.height = bounds.height
+    const context = maskCanvas.getContext('2d')
+    if (!context) throw new Error('Canvas 2D is unavailable in this browser.')
+    context.strokeStyle = '#fff'
+    context.fillStyle = '#fff'
+    context.lineCap = 'round'
+    context.lineJoin = 'round'
+    context.lineWidth = eraserSize
+    context.beginPath()
+    points.forEach((point, index) => {
+      const x = point.x - bounds.x
+      const y = point.y - bounds.y
+      if (index === 0) context.moveTo(x, y)
+      else context.lineTo(x, y)
+    })
+    context.stroke()
+    if (points.length === 1) {
+      const point = points[0]
+      context.beginPath()
+      context.arc(point.x - bounds.x, point.y - bounds.y, radius, 0, Math.PI * 2)
+      context.fill()
+    }
+    const pixels = context.getImageData(0, 0, bounds.width, bounds.height).data
+    const mask = new Uint8Array(bounds.width * bounds.height)
+    for (let index = 0; index < mask.length; index += 1) {
+      mask[index] = pixels[index * 4 + 3] > 0 ? 255 : 0
+    }
+    return { bounds, mask }
+  }
 
   const outlineMetrics = (layer: TextLayer, displayWidth: number) => {
     const pad =
@@ -349,6 +398,24 @@ export const EditorCanvas = ({
         )
         context.restore()
       }
+      const eraserDraft = eraserDraftRef.current
+      if (eraserDraft && eraserDraft.length > 0) {
+        context.save()
+        context.strokeStyle = 'rgba(255, 255, 255, 0.85)'
+        context.fillStyle = 'rgba(255, 255, 255, 0.85)'
+        context.lineCap = 'round'
+        context.lineJoin = 'round'
+        context.lineWidth = eraserSize
+        context.shadowColor = 'rgba(0, 0, 0, 0.35)'
+        context.shadowBlur = Math.max(3, eraserSize / 8)
+        context.beginPath()
+        eraserDraft.forEach((point, index) => {
+          if (index === 0) context.moveTo(point.x, point.y)
+          else context.lineTo(point.x, point.y)
+        })
+        context.stroke()
+        context.restore()
+      }
     },
     [
       height,
@@ -356,6 +423,7 @@ export const EditorCanvas = ({
       layers,
       regionSelection,
       selectedLayerIds,
+      eraserSize,
       showGrid,
       syncCanvasLayout,
       width,
@@ -444,6 +512,7 @@ export const EditorCanvas = ({
 
   useEffect(() => {
     if (interactionMode === 'select-region') return
+    if (interactionMode === 'erase') return
     regionStartRef.current = null
     if (interactionMode === 'preview') dragRef.current = null
   }, [interactionMode])
@@ -499,6 +568,10 @@ export const EditorCanvas = ({
       canvas.style.cursor = 'default'
       return
     }
+    if (interactionMode === 'erase') {
+      canvas.style.cursor = 'crosshair'
+      return
+    }
     if (interactionMode === 'select-region' || regionStartRef.current) {
       canvas.style.cursor = 'crosshair'
       return
@@ -536,6 +609,12 @@ export const EditorCanvas = ({
     clickCandidateRef.current = null
     if (editingLayerId) setEditingLayerId(null)
     if (interactionMode === 'preview') return
+    if (interactionMode === 'erase') {
+      eraserDraftRef.current = [point]
+      draw()
+      event.currentTarget.setPointerCapture(event.pointerId)
+      return
+    }
     if (interactionMode === 'select-region') {
       regionStartRef.current = point
       draw({ ...point, width: 0, height: 0 })
@@ -617,6 +696,11 @@ export const EditorCanvas = ({
       draw(nextSelection)
       return
     }
+    if (eraserDraftRef.current) {
+      eraserDraftRef.current = [...eraserDraftRef.current, point]
+      draw()
+      return
+    }
     if (!drag) {
       updateCursor(event.currentTarget, point, null)
       return
@@ -684,6 +768,12 @@ export const EditorCanvas = ({
         }
       }
       regionStartRef.current = null
+    }
+    if (eraserDraftRef.current) {
+      const points = eraserDraftRef.current
+      eraserDraftRef.current = null
+      draw()
+      if (points.length > 0) onEraseMask?.(eraseMaskFromPoints(points))
     }
     const clickCandidate = clickCandidateRef.current
     clickCandidateRef.current = null

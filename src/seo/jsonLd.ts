@@ -1,7 +1,7 @@
-import { EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH } from '../paths'
+import { EDITOR_PATH, EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH } from '../paths'
 import { absoluteUrl } from './origin'
 
-export type SeoPage = 'home' | 'faq' | 'howItWorks' | 'export'
+export type SeoPage = 'home' | 'faq' | 'howItWorks' | 'export' | 'editor'
 
 export type JsonLdFaq = {
   question: string
@@ -173,5 +173,6 @@ const pagePath = (page: SeoPage) => {
   if (page === 'faq') return FAQ_PATH
   if (page === 'howItWorks') return HOW_IT_WORKS_PATH
   if (page === 'export') return EXPORT_PATH
+  if (page === 'editor') return EDITOR_PATH
   return '/'
 }

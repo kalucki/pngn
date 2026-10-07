@@ -1,5 +1,17 @@
 import { Select, Slider, Tooltip } from "@mantine/core";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
+import {
+  trackExportFinished,
+  trackFontMatchFailed,
+  trackFontMatchFinished,
+  trackImageOpened,
+  trackImageRejected,
+  trackLayerRemoved,
+  trackMethodChanged,
+  trackProcessFinished,
+  type ProcessScope,
+  type ProcessStage,
+} from "./analytics";
 import type {
   Bounds,
   NeuralInpaintModel,
@@ -38,6 +50,7 @@ import {
 } from "./editor/processedRegions";
 import {
   imageDataFromFile,
+  imageDataToPngBuffer,
   patchProcessedImage,
 } from "./editor/revertLayerRemoval";
 import { RegionSelector } from "./editor/RegionSelector";
@@ -49,16 +62,19 @@ import { LandingStage } from "./layout/LandingStage";
 import { LoadingToast } from "./layout/LoadingToast";
 import {
   AlertCircleIcon,
+  BrushIcon,
+  CropIcon,
   DownloadIcon,
   EyeIcon,
   HelpCircleIcon,
   ImagePlusIcon,
   DashedBoxIcon,
   PencilIcon,
-  PlusIcon,
   RestartIcon,
+  TypeIcon,
+  WandIcon,
 } from "./layout/icons";
-import { EXPORT_PATH, navigate } from "./navigation";
+import { EDITOR_PATH, EXPORT_PATH, navigate, usePath } from "./navigation";
 import {
   processImage,
   warmupOcrModel,
@@ -67,11 +83,20 @@ import {
 import { warmupInpaintWorker } from "./processing/inpaintClient";
 import { prefetchInpaintModel } from "./processing/modelCache";
 import {
+  cropRaster,
+  eraseRaster,
+  flipRaster,
+  resizeRaster,
+} from "./editor/rasterTools";
+import { removeBackground, replaceBackground } from "./processing/cutoutClient";
+import {
   warmupOpenCvModule,
   warmupOpenCvWorker,
 } from "./processing/openCvClient";
 import { useLocale } from "./i18n/useLocale";
 import type { MessageKey } from "./i18n/messages";
+import { createHistoryState, historyReducer } from "./document/history";
+import { readLastAutosave, saveAutosave } from "./document/autosave";
 
 type ImageUrls = {
   clean: string;
@@ -93,6 +118,7 @@ type RunConfig = {
 type LayerSelectSource = "sidebar" | "canvas";
 
 type ReconstructionChoice = "auto" | "flat" | NeuralInpaintModel;
+type EditorTool = "select" | "text" | "erase" | "background";
 
 const initialOptions: ProcessingOptions = {
   method: "auto",
@@ -153,6 +179,70 @@ const canvasToPng = (canvas: HTMLCanvasElement) =>
       "image/png",
     );
   });
+
+const blobToDataUrl = (blob: Blob) =>
+  new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(reader.error);
+    reader.onload = () => resolve(String(reader.result));
+    reader.readAsDataURL(blob);
+  });
+
+const dataUrlToFile = async (dataUrl: string, name: string) => {
+  const blob = await fetch(dataUrl).then((response) => response.blob());
+  return new File([blob], name, { type: blob.type || "image/png" });
+};
+
+const blobFromCanvas = (canvas: HTMLCanvasElement) =>
+  new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) =>
+        blob ? resolve(blob) : reject(new Error("Canvas encoding failed.")),
+      "image/png",
+    );
+  });
+
+const initialProcessedImage = async (
+  bitmap: ImageBitmap,
+): Promise<{ processed: ProcessedImage; urls: ImageUrls }> => {
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const context = canvas.getContext("2d");
+  if (!context) throw new Error("Canvas 2D is unavailable in this browser.");
+  context.drawImage(bitmap, 0, 0);
+  const cleanBlob = await blobFromCanvas(canvas);
+  const blankMask = new ImageData(bitmap.width, bitmap.height);
+  const maskImage = await imageDataToPngBuffer(blankMask);
+  const maskBlob = new Blob([maskImage], { type: "image/png" });
+  const cleanImage = await cleanBlob.arrayBuffer();
+  return {
+    processed: {
+      width: bitmap.width,
+      height: bitmap.height,
+      cleanImage,
+      maskImage,
+      textLayers: [],
+      diagnostics: {
+        model: "none",
+        provider: "wasm",
+        inpaintModel: null,
+        inpaintProvider: null,
+        ocrMs: 0,
+        maskMs: 0,
+        segmentationMs: 0,
+        inpaintMs: 0,
+        reconstructionMs: 0,
+        totalMs: 0,
+        maskedPixels: 0,
+      },
+    },
+    urls: {
+      clean: URL.createObjectURL(cleanBlob),
+      mask: URL.createObjectURL(maskBlob),
+    },
+  };
+};
 
 const mergeProcessedImages = async (
   current: ImageUrls | null,
@@ -227,10 +317,16 @@ const composeProcessedRegions = async (regions: ProcessedRegion[]) => {
 };
 
 export const App = () => {
+  const path = usePath();
+  const inEditor = path === EDITOR_PATH;
   const { t, translateError } = useLocale();
   const [file, setFile] = useState<File | null>(null);
   const [result, setResult] = useState<ProcessedImage | null>(null);
-  const [layers, setLayers] = useState<TextLayer[]>([]);
+  const [layerHistory, dispatchLayerHistory] = useReducer(
+    historyReducer<TextLayer[]>,
+    createHistoryState<TextLayer[]>([]),
+  );
+  const layers = layerHistory.present;
   const [urls, setUrls] = useState<ImageUrls | null>(null);
   const [source, setSource] = useState<ImageSource | null>(null);
   const [selection, setSelection] = useState<Bounds | null>(null);
@@ -240,12 +336,21 @@ export const App = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [exportFormat, setExportFormat] = useState<ExportFormat>("image/png");
+  const [exportWidth, setExportWidth] = useState<number | undefined>();
+  const [exportHeight, setExportHeight] = useState<number | undefined>();
+  const [exportTargetKb, setExportTargetKb] = useState(0);
   const [isAddingRegion, setIsAddingRegion] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [isExportPreview, setIsExportPreview] = useState(false);
   const [regions, setRegions] = useState<ProcessedRegion[]>([]);
+  const [activeTool, setActiveTool] = useState<EditorTool>("text");
+  const [eraserSize, setEraserSize] = useState(36);
+  const [resizeWidth, setResizeWidth] = useState(0);
+  const [resizeHeight, setResizeHeight] = useState(0);
+  const [backgroundColor, setBackgroundColor] = useState("#ffffff");
+  const [toolHintHidden, setToolHintHidden] = useState(false);
   const processingGenerationRef = useRef(0);
   const regionsRef = useRef<ProcessedRegion[]>([]);
   const optionsRef = useRef(options);
@@ -260,6 +365,23 @@ export const App = () => {
   // decoded source image across every region instead of re-decoding it each
   // time "Select another area" is used.
   const imageIdRef = useRef("");
+
+  const setLayers = useCallback(
+    (value: TextLayer[] | ((current: TextLayer[]) => TextLayer[])) => {
+      const next =
+        typeof value === "function" ? value(layersRef.current) : value;
+      dispatchLayerHistory({ type: "commit", value: next });
+    },
+    [],
+  );
+
+  const replaceLayers = useCallback((next: TextLayer[]) => {
+    dispatchLayerHistory({ type: "replace", value: next });
+  }, []);
+
+  const clearLayerHistory = useCallback((next: TextLayer[] = []) => {
+    dispatchLayerHistory({ type: "clear", value: next });
+  }, []);
 
   const selectedLayerId = selectedLayerIds[0] ?? null;
   const selectedLayer = useMemo(
@@ -282,10 +404,31 @@ export const App = () => {
   const hasValidSelection = Boolean(
     selection && selection.width >= 4 && selection.height >= 4,
   );
-  const showDragHint =
-    (!result || !urls || isAddingRegion) &&
-    !hasValidSelection &&
-    !isProcessing;
+  const canvasHint: { message: MessageKey; icon: typeof DashedBoxIcon } | null =
+    (() => {
+      if (isProcessing || isExportPreview) return null;
+      const selectingText =
+        !result || !urls || (activeTool === "text" && isAddingRegion);
+      if (selectingText) {
+        return hasValidSelection
+          ? null
+          : { message: "app.dragHint", icon: DashedBoxIcon };
+      }
+      if (activeTool === "select") {
+        return hasValidSelection
+          ? null
+          : { message: "app.cropHint", icon: CropIcon };
+      }
+      if (toolHintHidden) return null;
+      if (activeTool === "erase") {
+        return { message: "app.eraseHint", icon: BrushIcon };
+      }
+      if (activeTool === "background") {
+        return { message: "app.backgroundHint", icon: WandIcon };
+      }
+      return null;
+    })();
+  const CanvasHintIcon = canvasHint?.icon;
   const documentKey =
     file && source ? editorDocumentKey(file, source.width, source.height) : "";
   const isBusy = isProcessing || isExporting;
@@ -311,6 +454,13 @@ export const App = () => {
     const activeOptions = config.optionsOverride ?? optionsRef.current;
     if (!file || !activeSelection) return;
     const generation = ++processingGenerationRef.current;
+    const startedAt = performance.now();
+    let stage: ProcessStage = "start";
+    const scope: ProcessScope = config.replaceRegionId
+      ? "reapply"
+      : isAddingRegionRef.current || regionsRef.current.length > 0
+        ? "region"
+        : "full";
     isProcessingRef.current = true;
     setIsProcessing(true);
     setError(null);
@@ -323,7 +473,8 @@ export const App = () => {
         imageIdRef.current,
         activeSelection,
         activeOptions,
-        (_nextStage, nextProgress) => {
+        (nextStage, nextProgress) => {
+          stage = nextStage;
           if (generation !== processingGenerationRef.current) return;
           setProgress(nextProgress);
         },
@@ -364,6 +515,7 @@ export const App = () => {
         regionId,
         layers: nextRegionLayers,
       });
+      stage = "compose";
       const nextUrls = config.replaceRegionId
         ? await composeProcessedRegions(nextRegions)
         : await mergeProcessedImages(urlsRef.current, processed);
@@ -392,7 +544,7 @@ export const App = () => {
           ),
         },
       });
-      setLayers(nextLayers);
+      replaceLayers(nextLayers);
       setSelectedLayerIds(
         config.replaceRegionId
           ? keepIds.length > 0
@@ -410,6 +562,15 @@ export const App = () => {
         setIsAddingRegion(false);
       }
       setProgress(1);
+      trackProcessFinished({
+        method: activeOptions.method,
+        outcome: "ok",
+        durationMs: performance.now() - startedAt,
+        scope,
+        layers: nextRegionLayers.length,
+        ocrProvider: processed.diagnostics.provider,
+        inpaintProvider: processed.diagnostics.inpaintProvider,
+      });
       if (file) {
         const applyMatchedLayer = (matched: TextLayer) => {
           console.info("[pngn font] applying match", {
@@ -448,9 +609,13 @@ export const App = () => {
               : current,
           );
         };
-        void matchTextLayerFonts(file, nextRegionLayers, applyMatchedLayer).catch(
-          (error) => {
+        void matchTextLayerFonts(file, nextRegionLayers, applyMatchedLayer).then(
+          (matched) => {
+            trackFontMatchFinished(matched);
+          },
+          (error: unknown) => {
             console.warn("[pngn font] matching failed:", error);
+            trackFontMatchFailed(error);
           },
         );
       }
@@ -461,6 +626,14 @@ export const App = () => {
           ? processingError.message
           : "Processing failed.",
       );
+      trackProcessFinished({
+        method: activeOptions.method,
+        outcome: "error",
+        durationMs: performance.now() - startedAt,
+        scope,
+        stage,
+        error: processingError,
+      });
     } finally {
       if (generation === processingGenerationRef.current) {
         isProcessingRef.current = false;
@@ -496,6 +669,25 @@ export const App = () => {
     warmupInpaintWorker();
     warmupOpenCvWorker();
     warmupFontIdWorker();
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.closest('input, textarea, select, [role="combobox"]'))
+      ) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (!(event.metaKey || event.ctrlKey) || key !== "z") return;
+      event.preventDefault();
+      dispatchLayerHistory({ type: event.shiftKey ? "redo" : "undo" });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
   useEffect(() => {
@@ -539,6 +731,7 @@ export const App = () => {
   }, [options, isAddingRegion, isProcessing, isExportPreview, file]);
 
   const requestMethod = (method: ReconstructionChoice) => {
+    if (optionsRef.current.method !== method) trackMethodChanged(method);
     setOptions((current) => ({
       ...current,
       method,
@@ -550,9 +743,29 @@ export const App = () => {
     void runProcessing();
   };
 
-  const handleFile = async (nextFile: File | undefined) => {
+  const resetToUploadedImage = useCallback(() => {
+    processingGenerationRef.current += 1;
+    isProcessingRef.current = false;
+    setIsProcessing(false);
+    setProgress(0);
+    setError(null);
+    setSelection(null);
+    setResult(null);
+    setUrls(null);
+    clearLayerHistory([]);
+    setSelectedLayerIds([]);
+    setIsAddingRegion(false);
+    setIsExportPreview(false);
+    setRegions([]);
+  }, [clearLayerHistory]);
+
+  const handleFile = useCallback(async (
+    nextFile: File | undefined,
+    source: "drop" | "picker",
+  ) => {
     if (!nextFile) return;
     if (!["image/png", "image/jpeg", "image/webp"].includes(nextFile.type)) {
+      trackImageRejected("type");
       setError("Choose a PNG, JPEG, or WebP image.");
       return;
     }
@@ -565,35 +778,127 @@ export const App = () => {
         width: bitmap.width,
         height: bitmap.height,
       };
+      const initial = await initialProcessedImage(bitmap);
       bitmap.close();
+      trackImageOpened(nextFile.type, nextSource.width, nextSource.height, source);
+      resetToUploadedImage();
       imageIdRef.current = crypto.randomUUID();
       setFile(nextFile);
       setSource(nextSource);
+      setResult(initial.processed);
+      setUrls(initial.urls);
+      setExportWidth(nextSource.width);
+      setExportHeight(nextSource.height);
+      setResizeWidth(nextSource.width);
+      setResizeHeight(nextSource.height);
+      setActiveTool("text");
+      setIsAddingRegion(true);
+      navigate(EDITOR_PATH);
       prefetchForMethod(options.method);
       prefetchFontIdModel();
       warmupOcrModel();
       warmupOpenCvModule();
-      resetToUploadedImage();
     } catch {
+      trackImageRejected("decode");
       setError("This image could not be decoded by the browser.");
     }
-  };
+  }, [options.method, resetToUploadedImage]);
+  const handleFileRef = useRef(handleFile);
+  useEffect(() => {
+    handleFileRef.current = handleFile;
+  }, [handleFile]);
 
-  const resetToUploadedImage = () => {
-    processingGenerationRef.current += 1;
-    isProcessingRef.current = false;
-    setIsProcessing(false);
-    setProgress(0);
-    setError(null);
-    setSelection(null);
-    setResult(null);
-    setUrls(null);
-    setLayers([]);
-    setSelectedLayerIds([]);
-    setIsAddingRegion(false);
-    setIsExportPreview(false);
-    setRegions([]);
-  };
+  useEffect(() => {
+    const onPaste = (event: ClipboardEvent) => {
+      if (isBusy) return;
+      const item = Array.from(event.clipboardData?.items ?? []).find((entry) =>
+        entry.type.startsWith("image/"),
+      );
+      const blob = item?.getAsFile();
+      if (!blob) return;
+      event.preventDefault();
+      const pasted = new File([blob], `pasted-image-${Date.now()}.png`, {
+        type: blob.type || "image/png",
+        lastModified: Date.now(),
+      });
+      void handleFileRef.current(pasted, "picker");
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [isBusy]);
+
+  useEffect(() => {
+    if (!inEditor || file || source) return;
+    let cancelled = false;
+    void readLastAutosave().then((saved) => {
+      if (cancelled) return;
+      if (!saved) {
+        navigate("/", { replace: true });
+        return;
+      }
+      const restoredFile = new File([saved.file.blob], saved.file.name, {
+        type: saved.file.type,
+        lastModified: saved.file.lastModified,
+      });
+      const sourceUrl = URL.createObjectURL(saved.file.blob);
+      setFile(restoredFile);
+      setSource({
+        url: sourceUrl,
+        width: saved.source.width,
+        height: saved.source.height,
+      });
+      setResizeWidth(saved.result?.width ?? saved.source.width);
+      setResizeHeight(saved.result?.height ?? saved.source.height);
+      setExportWidth(saved.result?.width ?? saved.source.width);
+      setExportHeight(saved.result?.height ?? saved.source.height);
+      if (saved.urls) {
+        setUrls({
+          clean: URL.createObjectURL(saved.urls.clean),
+          mask: URL.createObjectURL(saved.urls.mask),
+        });
+      }
+      setResult(saved.result);
+      replaceLayers(saved.layers);
+      setRegions(saved.regions);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [file, inEditor, replaceLayers, source]);
+
+  useEffect(() => {
+    if (!file || !source || !documentKey) return;
+    const timeout = window.setTimeout(() => {
+      void (async () => {
+        const savedUrls = urls
+          ? {
+              clean: await fetch(urls.clean).then((response) => response.blob()),
+              mask: await fetch(urls.mask).then((response) => response.blob()),
+            }
+          : undefined;
+        await saveAutosave({
+          key: documentKey,
+          savedAt: Date.now(),
+          file: {
+            name: file.name,
+            type: file.type,
+            size: file.size,
+            lastModified: file.lastModified,
+            blob: file,
+          },
+          source: {
+            width: source.width,
+            height: source.height,
+          },
+          urls: savedUrls,
+          result,
+          layers,
+          regions,
+        });
+      })().catch(() => undefined);
+    }, 800);
+    return () => window.clearTimeout(timeout);
+  }, [documentKey, file, layers, regions, result, source, urls]);
 
   const updateLayer = (nextLayer: TextLayer) => {
     setLayers((current) =>
@@ -613,7 +918,7 @@ export const App = () => {
 
   const fitTextLayerBounds = useCallback(() => {
     setLayers((current) => fitLayersTextBounds(current));
-  }, []);
+  }, [setLayers]);
 
   const updateSelectedLayerStyle = (patch: LayerStylePatch) => {
     const ids = selectedLayerIdsRef.current;
@@ -746,6 +1051,7 @@ export const App = () => {
       urlsRef.current = nextUrls;
       setRegions(nextRegions);
       setUrls(nextUrls);
+      trackLayerRemoved("ok");
       if (nextRegions.length === 0) {
         setResult(null);
       } else {
@@ -782,6 +1088,7 @@ export const App = () => {
       () => revertRemovedLayer(id),
     );
     void removeLayerChainRef.current.catch((error: unknown) => {
+      trackLayerRemoved("error", error);
       setError(
         error instanceof Error
           ? error.message
@@ -802,6 +1109,7 @@ export const App = () => {
   const handleExport = () => {
     if (!urls || !result) return;
     const filename = exportFileName(file?.name, exportFormat);
+    const startedAt = performance.now();
     setIsExporting(true);
     setError(null);
     void (async () => {
@@ -812,12 +1120,28 @@ export const App = () => {
           result.height,
           layers,
           exportFormat,
+          {
+            width: exportWidth,
+            height: exportHeight,
+            targetBytes: exportTargetKb > 0 ? exportTargetKb * 1024 : undefined,
+          },
         );
         const pending = stashExport(blob, filename);
         downloadFromUrl(pending.url, pending.filename);
+        trackExportFinished({
+          format: exportFormat,
+          outcome: "ok",
+          durationMs: performance.now() - startedAt,
+        });
         setExportModalOpen(false);
         navigate(EXPORT_PATH);
       } catch (exportError) {
+        trackExportFinished({
+          format: exportFormat,
+          outcome: "error",
+          durationMs: performance.now() - startedAt,
+          error: exportError,
+        });
         setError(
           exportError instanceof Error ? exportError.message : "Export failed.",
         );
@@ -827,58 +1151,291 @@ export const App = () => {
     })();
   };
 
-  const exportControl =
+  const applyRasterEdit = async (
+    edit: () => Promise<{ url: string; buffer: ArrayBuffer; width: number; height: number }>,
+  ) => {
+    if (!urls || !result) return;
+    const edited = await edit();
+    setUrls((current) => (current ? { ...current, clean: edited.url } : current));
+    setResult((current) =>
+      current
+        ? {
+            ...current,
+            width: edited.width,
+            height: edited.height,
+            cleanImage: edited.buffer,
+          }
+        : current,
+    );
+    setExportWidth(edited.width);
+    setExportHeight(edited.height);
+    setResizeWidth(edited.width);
+    setResizeHeight(edited.height);
+  };
+
+  const inpaintModelForDevice = (): NeuralInpaintModel =>
+    navigator.maxTouchPoints > 1 || window.innerWidth < 800 ? "migan" : "lama";
+
+  const handleEraseMask = (stroke: { bounds: Bounds; mask: Uint8Array }) => {
+    if (!urls || !result || isBusy) return;
+    setToolHintHidden(true);
+    setIsProcessing(true);
+    setProgress(0.08);
+    void applyRasterEdit(() =>
+      eraseRaster(urls.clean, stroke.bounds, stroke.mask, inpaintModelForDevice()),
+    )
+      .catch((error: unknown) => {
+        setError(error instanceof Error ? error.message : "Image processing failed.");
+      })
+      .finally(() => {
+        setProgress(0);
+        setIsProcessing(false);
+      });
+  };
+
+  const applyCrop = () => {
+    if (!selection || !urls || !result || selection.width < 4 || selection.height < 4) return;
+    void applyRasterEdit(() => cropRaster(urls.clean, selection)).catch((error: unknown) => {
+      setError(error instanceof Error ? error.message : "Image processing failed.");
+    });
+  };
+
+  const applyFlip = (axis: "horizontal" | "vertical") => {
+    if (!urls || !result) return;
+    void applyRasterEdit(() => flipRaster(urls.clean, axis)).catch((error: unknown) => {
+      setError(error instanceof Error ? error.message : "Image processing failed.");
+    });
+  };
+
+  const applyResize = () => {
+    if (!urls || !result || resizeWidth < 1 || resizeHeight < 1) return;
+    void applyRasterEdit(() =>
+      resizeRaster(urls.clean, Math.round(resizeWidth), Math.round(resizeHeight)),
+    ).catch((error: unknown) => {
+      setError(error instanceof Error ? error.message : "Image processing failed.");
+    });
+  };
+
+  const applyBackgroundCutout = () => {
+    if (!urls || !result) return;
+    setToolHintHidden(true);
+    void applyRasterEdit(() => removeBackground(urls.clean)).catch((error: unknown) => {
+      setError(error instanceof Error ? error.message : "Image processing failed.");
+    });
+  };
+
+  const applyBackgroundReplacement = () => {
+    if (!urls || !result) return;
+    setToolHintHidden(true);
+    void applyRasterEdit(() => replaceBackground(urls.clean, backgroundColor)).catch(
+      (error: unknown) => {
+        setError(error instanceof Error ? error.message : "Image processing failed.");
+      },
+    );
+  };
+
+  const saveProjectFile = () => {
+    if (!file || !source) return;
+    void (async () => {
+      const clean = urls
+        ? await blobToDataUrl(await fetch(urls.clean).then((response) => response.blob()))
+        : null;
+      const payload = {
+        version: 1,
+        name: file.name,
+        source: {
+          width: source.width,
+          height: source.height,
+          dataUrl: await blobToDataUrl(file),
+        },
+        clean,
+        layers,
+      };
+      const blob = new Blob([JSON.stringify(payload)], {
+        type: "application/json",
+      });
+      downloadFromUrl(URL.createObjectURL(blob), `${file.name.replace(/\.[^.]+$/, "")}.pngn`);
+    })();
+  };
+
+  const loadProjectFile = (projectFile: File | undefined) => {
+    if (!projectFile) return;
+    void (async () => {
+      const payload = JSON.parse(await projectFile.text()) as {
+        name: string;
+        source: { width: number; height: number; dataUrl: string };
+        clean?: string | null;
+        layers?: TextLayer[];
+      };
+      const restored = await dataUrlToFile(payload.source.dataUrl, payload.name);
+      await handleFile(restored, "picker");
+      if (payload.clean) {
+        const cleanFile = await dataUrlToFile(payload.clean, "clean.png");
+        const cleanUrl = URL.createObjectURL(cleanFile);
+        const cleanImage = await cleanFile.arrayBuffer();
+        setUrls({ clean: cleanUrl, mask: cleanUrl });
+        setResult((current) =>
+          current
+            ? { ...current, cleanImage }
+            : current,
+        );
+      }
+      replaceLayers(payload.layers ?? []);
+    })().catch((error: unknown) => {
+      setError(error instanceof Error ? error.message : "Project could not be opened.");
+    });
+  };
+
+  const selectEditorTool = (tool: EditorTool) => {
+    setActiveTool(tool);
+    setSelection(null);
+    setIsExportPreview(false);
+    setToolHintHidden(false);
+    if (tool === "text" || tool === "select") {
+      setIsAddingRegion(true);
+      setSelectedLayerIds([]);
+      return;
+    }
+    setIsAddingRegion(false);
+    setSelectedLayerIds([]);
+  };
+
+  const editorMenus = (
+    <div className="editor-menu-row" aria-label="Editor menus">
+      <details className="editor-menu">
+        <summary>File</summary>
+        <div className="editor-menu-panel">
+          <label className={`editor-menu-item${isBusy ? " is-disabled" : ""}`}>
+            <ImagePlusIcon />
+            {t("app.newImage")}
+            <input
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              disabled={isBusy}
+              onChange={(event) =>
+                void handleFile(event.target.files?.[0], "picker")
+              }
+            />
+          </label>
+          <label className={`editor-menu-item${isBusy ? " is-disabled" : ""}`}>
+            <ImagePlusIcon />
+            Open project
+            <input
+              type="file"
+              accept=".pngn,application/json"
+              disabled={isBusy}
+              onChange={(event) => loadProjectFile(event.target.files?.[0])}
+            />
+          </label>
+          <button
+            type="button"
+            className="editor-menu-item"
+            disabled={isBusy || !file}
+            onClick={saveProjectFile}
+          >
+            <DownloadIcon />
+            Save project
+          </button>
+          <button
+            type="button"
+            className="editor-menu-item"
+            disabled={isBusy}
+            onClick={resetToUploadedImage}
+          >
+            <RestartIcon />
+            {t("app.restart")}
+          </button>
+        </div>
+      </details>
+      <details className="editor-menu">
+        <summary>Export</summary>
+        <div className="editor-menu-panel">
+          <button
+            type="button"
+            className="editor-menu-item"
+            disabled={isBusy || !urls || !result}
+            onClick={() => setExportModalOpen(true)}
+          >
+            <DownloadIcon />
+            {t("app.export")}
+          </button>
+          <button
+            type="button"
+            className="editor-menu-item"
+            disabled={isBusy || !urls || !result}
+            aria-pressed={isExportPreview}
+            onClick={handleToggleExportPreview}
+          >
+            <EyeIcon />
+            {t("app.exportPreview")}
+          </button>
+        </div>
+      </details>
+      <details className="editor-menu">
+        <summary>Edit</summary>
+        <div className="editor-menu-panel">
+          <button
+            type="button"
+            className="editor-menu-item"
+            disabled={isBusy || layerHistory.past.length === 0}
+            onClick={() => dispatchLayerHistory({ type: "undo" })}
+          >
+            Undo
+          </button>
+          <button
+            type="button"
+            className="editor-menu-item"
+            disabled={isBusy || layerHistory.future.length === 0}
+            onClick={() => dispatchLayerHistory({ type: "redo" })}
+          >
+            Redo
+          </button>
+        </div>
+      </details>
+    </div>
+  );
+
+  const featureToolbar =
     urls && result ? (
-      <>
+      <div className="editor-featurebar" role="toolbar" aria-label="Tools">
         <button
           type="button"
-          className="button-with-icon sidebar-export-button"
-          disabled={isBusy}
-          onClick={() => setExportModalOpen(true)}
+          className={activeTool === "text" ? "feature-tool active" : "feature-tool"}
+          aria-pressed={activeTool === "text"}
+          onClick={() => selectEditorTool("text")}
         >
-          <DownloadIcon />
-          {t("app.export")}
+          <TypeIcon />
+          <span>Text</span>
         </button>
         <button
           type="button"
-          className="button-with-icon secondary-button sidebar-preview-button"
-          disabled={isBusy}
-          aria-pressed={isExportPreview}
-          onClick={handleToggleExportPreview}
+          className={activeTool === "erase" ? "feature-tool active" : "feature-tool"}
+          aria-pressed={activeTool === "erase"}
+          onClick={() => selectEditorTool("erase")}
         >
-          <EyeIcon />
-          {t("app.exportPreview")}
+          <BrushIcon />
+          <span>Erase</span>
         </button>
-      </>
+        <button
+          type="button"
+          className={activeTool === "select" ? "feature-tool active" : "feature-tool"}
+          aria-pressed={activeTool === "select"}
+          onClick={() => selectEditorTool("select")}
+        >
+          <CropIcon />
+          <span>Crop</span>
+        </button>
+        <button
+          type="button"
+          className={activeTool === "background" ? "feature-tool active" : "feature-tool"}
+          aria-pressed={activeTool === "background"}
+          onClick={() => selectEditorTool("background")}
+        >
+          <WandIcon />
+          <span>Background</span>
+        </button>
+      </div>
     ) : null;
-
-  const newImageControl = (
-    <label
-      className={`upload-button${isBusy ? " is-disabled" : ""}`}
-      aria-disabled={isBusy}
-    >
-      <ImagePlusIcon />
-      {t("app.newImage")}
-      <input
-        type="file"
-        accept="image/png,image/jpeg,image/webp"
-        disabled={isBusy}
-        onChange={(event) => void handleFile(event.target.files?.[0])}
-      />
-    </label>
-  );
-
-  const restartControl = (
-    <button
-      type="button"
-      className="button-with-icon upload-button"
-      disabled={isBusy}
-      onClick={resetToUploadedImage}
-    >
-      <RestartIcon />
-      {t("app.restart")}
-    </button>
-  );
 
   const statusCard = error ? (
     <section className="status-card error">
@@ -893,130 +1450,261 @@ export const App = () => {
 
   const processingControls = (
     <section className="processing-controls">
-      <label>
-        <span className="control-label-row">{t("app.backgroundFill")}</span>
-        <Select
-          className="control-input"
-          aria-label={t("app.backgroundFill")}
-          allowDeselect={false}
-          checkIconPosition="left"
-          disabled={isProcessing}
-          comboboxProps={{ width: "target", shadow: "md", withinPortal: true }}
-          hiddenInputProps={{ className: "reconstruction-method" }}
-          value={
-            options.method === "auto" ||
-            options.method === "flat" ||
-            options.method === "lama" ||
-            options.method === "migan"
-              ? options.method
-              : "auto"
-          }
-          data={reconstructionMethods.map((method) => ({
-            value: method.value,
-            label: t(method.label),
-          }))}
-          renderOption={({ option }) => {
-            const method = reconstructionMethods.find(
-              (item) => item.value === option.value,
-            );
-            if (!method) return option.label;
-            return (
-              <span className="method-select-option">
-                <span>{option.label}</span>
-                <Tooltip
-                  label={t(method.hint)}
-                  withArrow
-                  multiline
-                  w={200}
-                  position="right"
-                  events={{ hover: true, focus: true, touch: true }}
+      {urls && result && activeTool === "text" ? (
+        <div className="raster-controls">
+          {urls && result && !isAddingRegion ? (
+            <button
+              type="button"
+              className="button-with-icon"
+              disabled={isProcessing}
+              onClick={() => {
+                setActiveTool("text");
+                setIsAddingRegion(true);
+                setSelection(null);
+                setSelectedLayerIds([]);
+                setIsExportPreview(false);
+              }}
+            >
+              <TypeIcon />
+              {t("app.selectAnother")}
+            </button>
+          ) : (
+            <>
+              <button
+                type="button"
+                className="button-with-icon"
+                disabled={!file || !hasValidSelection || isProcessing}
+                onClick={requestProcessing}
+              >
+                <PencilIcon />
+                {isProcessing
+                  ? t("app.processing")
+                  : t("app.editSelected")}
+              </button>
+              {isAddingRegion || selection ? (
+                <button
+                  type="button"
+                  className="button-with-icon secondary-button"
+                  disabled={isProcessing}
+                  onClick={() => {
+                    setSelection(null);
+                    if (isAddingRegion) {
+                      setIsAddingRegion(false);
+                      setSelectedLayerIds([]);
+                    }
+                  }}
                 >
-                  <span
-                    className="method-select-hint"
-                    role="img"
-                    aria-label={t(method.hintAria)}
-                    onMouseDown={(event) => event.preventDefault()}
-                  >
-                    <HelpCircleIcon />
+                  {t("app.cancel")}
+                </button>
+              ) : null}
+            </>
+          )}
+          <label>
+            <span className="control-label-row">{t("app.backgroundFill")}</span>
+            <Select
+              className="control-input"
+              aria-label={t("app.backgroundFill")}
+              allowDeselect={false}
+              checkIconPosition="left"
+              disabled={isProcessing}
+              comboboxProps={{ width: "target", shadow: "md", withinPortal: true }}
+              hiddenInputProps={{ className: "reconstruction-method" }}
+              value={
+                options.method === "auto" ||
+                options.method === "flat" ||
+                options.method === "lama" ||
+                options.method === "migan"
+                  ? options.method
+                  : "auto"
+              }
+              data={reconstructionMethods.map((method) => ({
+                value: method.value,
+                label: t(method.label),
+              }))}
+              renderOption={({ option }) => {
+                const method = reconstructionMethods.find(
+                  (item) => item.value === option.value,
+                );
+                if (!method) return option.label;
+                return (
+                  <span className="method-select-option">
+                    <span>{option.label}</span>
+                    <Tooltip
+                      label={t(method.hint)}
+                      withArrow
+                      multiline
+                      w={200}
+                      position="right"
+                      events={{ hover: true, focus: true, touch: true }}
+                    >
+                      <span
+                        className="method-select-hint"
+                        role="img"
+                        aria-label={t(method.hintAria)}
+                        onMouseDown={(event) => event.preventDefault()}
+                      >
+                        <HelpCircleIcon />
+                      </span>
+                    </Tooltip>
                   </span>
-                </Tooltip>
-              </span>
-            );
-          }}
-          onChange={(value) => {
-            if (
-              value === "auto" ||
-              value === "flat" ||
-              value === "migan" ||
-              value === "lama"
-            ) {
-              requestMethod(value);
-            }
-          }}
-        />
-      </label>
-      <label>
-        <span className="control-label-row">
-          {t("app.maskThreshold")}
-          <HintTooltip
-            label={t("app.maskThresholdHintAria")}
-            hint={t("app.maskThresholdHint")}
+                );
+              }}
+              onChange={(value) => {
+                if (
+                  value === "auto" ||
+                  value === "flat" ||
+                  value === "migan" ||
+                  value === "lama"
+                ) {
+                  requestMethod(value);
+                }
+              }}
+            />
+          </label>
+          <label>
+            <span className="control-label-row">
+              {t("app.maskThreshold")}
+              <HintTooltip
+                label={t("app.maskThresholdHintAria")}
+                hint={t("app.maskThresholdHint")}
+              />
+              <output>{options.maskThreshold}</output>
+            </span>
+            <Slider
+              className="control-input"
+              min={12}
+              max={90}
+              disabled={isProcessing}
+              thumbLabel={t("app.maskThreshold")}
+              value={options.maskThreshold}
+              onChange={(maskThreshold) =>
+                setOptions((current) => ({
+                  ...current,
+                  maskThreshold,
+                }))
+              }
+            />
+          </label>
+          <label>
+            <span className="control-label-row">
+              {t("app.maskExpansion")}
+              <HintTooltip
+                label={t("app.maskExpansionHintAria")}
+                hint={t("app.maskExpansionHint")}
+              />
+              <output>{options.maskDilation}px</output>
+            </span>
+            <Slider
+              className="control-input"
+              min={0}
+              max={16}
+              disabled={isProcessing}
+              thumbLabel={t("app.maskExpansion")}
+              label={(value) => `${value}px`}
+              value={options.maskDilation}
+              onChange={(maskDilation) =>
+                setOptions((current) => ({
+                  ...current,
+                  maskDilation,
+                }))
+              }
+            />
+          </label>
+          <p
+            className={`settings-apply-hint${settingsHint ? " is-visible" : ""}`}
+            aria-live="polite"
+            aria-hidden={settingsHint ? undefined : true}
+          >
+            {settingsHint}
+          </p>
+        </div>
+      ) : null}
+      {urls && result && activeTool === "erase" ? (
+        <label>
+          <span className="control-label-row">
+            Eraser size
+            <output>{eraserSize}px</output>
+          </span>
+          <Slider
+            className="control-input"
+            min={8}
+            max={160}
+            disabled={isProcessing}
+            value={eraserSize}
+            label={(value) => `${value}px`}
+            onChange={setEraserSize}
           />
-          <output>{options.maskThreshold}</output>
-        </span>
-        <Slider
-          className="control-input"
-          min={12}
-          max={90}
-          disabled={isProcessing}
-          thumbLabel={t("app.maskThreshold")}
-          value={options.maskThreshold}
-          onChange={(maskThreshold) =>
-            setOptions((current) => ({
-              ...current,
-              maskThreshold,
-            }))
-          }
-        />
-      </label>
-      <label>
-        <span className="control-label-row">
-          {t("app.maskExpansion")}
-          <HintTooltip
-            label={t("app.maskExpansionHintAria")}
-            hint={t("app.maskExpansionHint")}
-          />
-          <output>{options.maskDilation}px</output>
-        </span>
-        <Slider
-          className="control-input"
-          min={0}
-          max={16}
-          disabled={isProcessing}
-          thumbLabel={t("app.maskExpansion")}
-          label={(value) => `${value}px`}
-          value={options.maskDilation}
-          onChange={(maskDilation) =>
-            setOptions((current) => ({
-              ...current,
-              maskDilation,
-            }))
-          }
-        />
-      </label>
-      <p
-        className={`settings-apply-hint${settingsHint ? " is-visible" : ""}`}
-        aria-live="polite"
-        aria-hidden={settingsHint ? undefined : true}
-      >
-        {settingsHint}
-      </p>
+        </label>
+      ) : null}
+      {urls && result && activeTool === "select" ? (
+        <div className="raster-controls">
+          <button type="button" className="secondary-button" onClick={applyCrop}>
+            Crop to selection
+          </button>
+          <button type="button" className="secondary-button" onClick={() => applyFlip("horizontal")}>
+            Flip horizontal
+          </button>
+          <button type="button" className="secondary-button" onClick={() => applyFlip("vertical")}>
+            Flip vertical
+          </button>
+          <label>
+            Width
+            <input
+              className="plain-input"
+              type="number"
+              min={1}
+              value={resizeWidth || ""}
+              onChange={(event) => setResizeWidth(Number(event.target.value) || 0)}
+            />
+          </label>
+          <label>
+            Height
+            <input
+              className="plain-input"
+              type="number"
+              min={1}
+              value={resizeHeight || ""}
+              onChange={(event) => setResizeHeight(Number(event.target.value) || 0)}
+            />
+          </label>
+          <button type="button" className="secondary-button" onClick={applyResize}>
+            Resize
+          </button>
+        </div>
+      ) : null}
+      {urls && result && activeTool === "background" ? (
+        <div className="raster-controls">
+          <button type="button" className="secondary-button" onClick={applyBackgroundCutout}>
+            Remove background
+          </button>
+          <label>
+            Background colour
+            <input
+              className="plain-input"
+              type="color"
+              value={backgroundColor}
+              onChange={(event) => setBackgroundColor(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className="secondary-button"
+            onClick={applyBackgroundReplacement}
+          >
+            Replace background
+          </button>
+        </div>
+      ) : null}
     </section>
   );
 
+  if (inEditor && !source) {
+    return <main className="app-shell is-editor" />;
+  }
+
   return (
-    <main className={`app-shell${!source ? " is-landing" : " is-editor"}`}>
-      {!source ? (
+    <main className={`app-shell${inEditor ? " is-editor" : " is-landing"}`}>
+      {!inEditor || !source ? (
         <>
           <header className="app-header">
             <FlowSteps current={1} />
@@ -1033,7 +1721,7 @@ export const App = () => {
               onDrop={(event) => {
                 event.preventDefault();
                 setIsDragging(false);
-                void handleFile(event.dataTransfer.files?.[0]);
+                void handleFile(event.dataTransfer.files?.[0], "drop");
               }}
             >
               <span className="dropzone-icon-wrap">
@@ -1059,7 +1747,9 @@ export const App = () => {
               <input
                 type="file"
                 accept="image/png,image/jpeg,image/webp"
-                onChange={(event) => void handleFile(event.target.files?.[0])}
+                onChange={(event) =>
+                  void handleFile(event.target.files?.[0], "picker")
+                }
               />
             </label>
           </LandingStage>
@@ -1070,16 +1760,20 @@ export const App = () => {
           <aside className="editor-sidebar">
             <div className="sidebar-header">
               <h1 className="visually-hidden">{t("title.home")}</h1>
-              {exportControl}
-              {newImageControl}
-              {restartControl}
+              {editorMenus}
             </div>
             <ExportModal
               opened={exportModalOpen}
               format={exportFormat}
               isExporting={isExporting}
+              outputWidth={exportWidth}
+              outputHeight={exportHeight}
+              targetKb={exportTargetKb}
               onClose={() => setExportModalOpen(false)}
               onFormatChange={setExportFormat}
+              onOutputWidthChange={setExportWidth}
+              onOutputHeightChange={setExportHeight}
+              onTargetKbChange={setExportTargetKb}
               onExport={handleExport}
             />
             <LayersPanel
@@ -1091,59 +1785,14 @@ export const App = () => {
               onRemoveLayer={removeLayer}
             />
             <div className="sidebar-actions">
-              {urls && result && !isAddingRegion ? (
-                <button
-                  type="button"
-                  className="button-with-icon"
-                  disabled={isProcessing}
-                  onClick={() => {
-                    setIsAddingRegion(true);
-                    setSelection(null);
-                    setSelectedLayerIds([]);
-                    setIsExportPreview(false);
-                  }}
-                >
-                  <PlusIcon />
-                  {t("app.selectAnother")}
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    className="button-with-icon"
-                    disabled={!file || !hasValidSelection || isProcessing}
-                    onClick={requestProcessing}
-                  >
-                    <PencilIcon />
-                    {isProcessing
-                      ? t("app.processing")
-                      : t("app.editSelected")}
-                  </button>
-                  {isAddingRegion || selection ? (
-                    <button
-                      type="button"
-                      className="button-with-icon secondary-button"
-                      disabled={isProcessing}
-                      onClick={() => {
-                        setSelection(null);
-                        if (isAddingRegion) {
-                          setIsAddingRegion(false);
-                          setSelectedLayerIds([]);
-                        }
-                      }}
-                    >
-                      {t("app.cancel")}
-                    </button>
-                  ) : null}
-                </>
-              )}
               {processingControls}
             </div>
           </aside>
 
           <div className="editor-main">
-            {result && urls ? (
-              <div className="editor-topbar">
+            {featureToolbar}
+            {result && urls && (activeTool === "text" || selectedLayer) ? (
+              <div className="editor-topbar" aria-label="Text formatting">
                 <TextToolbar
                   layer={isExportPreview ? null : selectedLayer}
                   disabled={isProcessing}
@@ -1173,15 +1822,16 @@ export const App = () => {
                   layers={layers}
                   selectedLayerIds={selectedLayerIds}
                   interactionMode={
-                    isProcessing
+                    isProcessing || isExportPreview
                       ? "preview"
-                      : isAddingRegion
-                        ? "select-region"
-                        : isExportPreview
-                          ? "preview"
+                      : activeTool === "erase"
+                        ? "erase"
+                        : activeTool === "select" || isAddingRegion
+                          ? "select-region"
                           : "edit"
                   }
                   regionSelection={selection}
+                  eraserSize={eraserSize}
                   onSelectLayer={handleSelectLayer}
                   onMoveLayer={moveLayer}
                   onRotateLayer={rotateLayer}
@@ -1189,13 +1839,14 @@ export const App = () => {
                   onEditText={editLayerText}
                   onFitTextBounds={fitTextLayerBounds}
                   onRegionSelectionChange={setSelection}
+                  onEraseMask={handleEraseMask}
                 />
               )}
-              {showDragHint ? (
+              {canvasHint && CanvasHintIcon ? (
                 <div className="selection-hint" role="status">
-                  <p>
-                    <DashedBoxIcon size={18} />
-                    {t("app.dragHint")}
+                  <p key={canvasHint.message}>
+                    <CanvasHintIcon size={18} />
+                    {t(canvasHint.message)}
                   </p>
                 </div>
               ) : null}

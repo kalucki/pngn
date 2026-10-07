@@ -1,6 +1,7 @@
 import { downloadFromUrl } from '../editor/exportImage'
 import { readPendingExport } from '../editor/exportTransfer'
 import { useLocale } from '../i18n/useLocale'
+import { EDITOR_PATH } from '../navigation'
 import { CheckIcon, DownloadIcon } from '../layout/icons'
 import { Link } from '../layout/Link'
 import { TipEth } from '../layout/TipEth'
@@ -15,7 +16,7 @@ export const ExportPage = () => {
         <section className="export-card export-card-error" aria-live="assertive">
           <h1>{t('export.couldNot')}</h1>
           <p>{t('export.noPending')}</p>
-          <Link to="/" className="button-with-icon export-home-link">
+          <Link to={EDITOR_PATH} className="button-with-icon export-home-link">
             {t('export.back')}
           </Link>
         </section>
@@ -45,7 +46,7 @@ export const ExportPage = () => {
             <DownloadIcon />
             {t('export.downloadAgain')}
           </button>
-          <Link to="/" className="secondary-button export-home-link">
+          <Link to={EDITOR_PATH} className="secondary-button export-home-link">
             {t('export.back')}
           </Link>
         </div>

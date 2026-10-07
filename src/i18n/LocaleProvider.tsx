@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { setAnalyticsLocale } from "../analytics";
 import { LocaleContext } from "./context";
 import {
   DEFAULT_LOCALE,
@@ -34,6 +35,7 @@ export const LocaleProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     applyDocumentLocale(locale);
+    setAnalyticsLocale(locale);
     try {
       localStorage.setItem(LOCALE_STORAGE_KEY, locale);
     } catch {

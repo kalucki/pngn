@@ -1,5 +1,5 @@
 import { useLocale } from '../i18n/useLocale'
-import { FAQ_PATH, HOW_IT_WORKS_PATH, usePath } from '../navigation'
+import { BATCH_PATH, FAQ_PATH, HOW_IT_WORKS_PATH, usePath } from '../navigation'
 import { LanguageSwitcher } from './LanguageSwitcher'
 import { Link } from './Link'
 
@@ -8,6 +8,7 @@ export const NavBar = () => {
   const { t } = useLocale()
   const onHowItWorks = path === HOW_IT_WORKS_PATH
   const onFaq = path === FAQ_PATH
+  const onBatch = path === BATCH_PATH
 
   return (
     <nav className="site-nav" aria-label={t('nav.primary')}>
@@ -29,6 +30,13 @@ export const NavBar = () => {
             aria-current={onFaq ? 'page' : undefined}
           >
             {t('nav.faq')}
+          </Link>
+          <Link
+            to={BATCH_PATH}
+            className={`site-nav-link${onBatch ? ' active' : ''}`}
+            aria-current={onBatch ? 'page' : undefined}
+          >
+            Convert
           </Link>
           <Link
             to={HOW_IT_WORKS_PATH}

@@ -36,6 +36,7 @@ export type LayerRemoval = {
 }
 
 export type TextLayer = {
+  kind?: 'text'
   id: string
   originalText: string
   text: string
@@ -75,6 +76,55 @@ export type TextLayer = {
     backgroundType: 'flat' | 'gradient' | 'complex'
     originalInkWidth?: number
   }
+}
+
+export type RasterLayer = {
+  kind: 'raster'
+  id: string
+  name: string
+  image: ArrayBuffer
+  width: number
+  height: number
+  opacity: number
+  visible: boolean
+}
+
+export type ImageLayer = {
+  kind: 'image'
+  id: string
+  name: string
+  image: ArrayBuffer
+  mimeType: string
+  bounds: Bounds
+  rotation: number
+  opacity: number
+  visible: boolean
+}
+
+export type AdjustmentLayer = {
+  kind: 'adjustment'
+  id: string
+  name: string
+  visible: boolean
+  adjustments: ImageAdjustments
+}
+
+export type Layer = RasterLayer | (TextLayer & { kind: 'text' }) | ImageLayer | AdjustmentLayer
+
+export type ImageAdjustments = {
+  brightness: number
+  contrast: number
+  saturation: number
+  blur: number
+}
+
+export type EditorDocument = {
+  id: string
+  width: number
+  height: number
+  layers: Layer[]
+  activeLayerIds: string[]
+  adjustments: ImageAdjustments
 }
 
 export type ProcessingDiagnostics = {

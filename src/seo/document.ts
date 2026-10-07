@@ -1,7 +1,7 @@
 import { FAQ_ITEMS } from './faqItems'
 import { buildJsonLd, type SeoPage } from './jsonLd'
 import { absoluteUrl, getSiteOrigin } from './origin'
-import { EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH } from '../paths'
+import { EDITOR_PATH, EXPORT_PATH, FAQ_PATH, HOW_IT_WORKS_PATH } from '../paths'
 import type { Translate } from '../i18n/messages'
 
 const JSON_LD_ID = 'pngn-jsonld'
@@ -12,6 +12,7 @@ const PAGE_PATH: Record<SeoPage, string> = {
   faq: FAQ_PATH,
   howItWorks: HOW_IT_WORKS_PATH,
   export: EXPORT_PATH,
+  editor: EDITOR_PATH,
 }
 
 const TITLE_KEY = {
@@ -19,6 +20,7 @@ const TITLE_KEY = {
   faq: 'title.faq',
   howItWorks: 'title.howItWorks',
   export: 'title.export',
+  editor: 'title.homePage',
 } as const
 
 const DESCRIPTION_KEY = {
@@ -26,6 +28,7 @@ const DESCRIPTION_KEY = {
   faq: 'meta.faq',
   howItWorks: 'meta.howItWorks',
   export: 'meta.export',
+  editor: 'meta.home',
 } as const
 
 const upsertMeta = (attr: 'name' | 'property', key: string, content: string) => {
@@ -67,7 +70,7 @@ export const applyDocumentSeo = (page: SeoPage, t: Translate) => {
   const title = t(TITLE_KEY[page])
   const description = t(DESCRIPTION_KEY[page])
   const image = absoluteUrl(OG_IMAGE_PATH, origin)
-  const indexable = page !== 'export'
+  const indexable = page !== 'export' && page !== 'editor'
 
   document.title = title
   upsertMeta('name', 'description', description)
