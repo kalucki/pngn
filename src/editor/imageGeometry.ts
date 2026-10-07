@@ -180,6 +180,15 @@ export const rotateEdgeWidth = (imageWidth: number, displayWidth: number) => {
   return Math.max(14 * cssToImage, 8)
 }
 
+export const eraserScreenDiameter = (
+  eraserSize: number,
+  imageWidth: number,
+  displayWidth: number,
+) => {
+  if (eraserSize <= 0 || imageWidth <= 0 || displayWidth <= 0) return 0
+  return (eraserSize / imageWidth) * displayWidth
+}
+
 export const layerOutlinePadding = (
   fontSize: number,
   imageWidth: number,

@@ -4,6 +4,7 @@ import {
   boundsCenter,
   cappedResizeHandleSize,
   containedRect,
+  eraserScreenDiameter,
   fittedContainSize,
   fontSizeFromCornerDrag,
   isOnResizeCorner,
@@ -144,6 +145,8 @@ export const EditorCanvas = ({
   const clickCandidateRef = useRef<ClickCandidate | null>(null)
   const regionStartRef = useRef<Point | null>(null)
   const eraserDraftRef = useRef<Point[] | null>(null)
+  const eraserCursorRef = useRef<HTMLDivElement>(null)
+  const eraserPointerRef = useRef<{ x: number; y: number } | null>(null)
   const layoutSizeRef = useRef({ width: 0, height: 0 })
   const [layoutSize, setLayoutSize] = useState({ width: 0, height: 0 })
   const [editingLayerId, setEditingLayerId] = useState<string | null>(null)
@@ -503,6 +506,7 @@ export const EditorCanvas = ({
   useEffect(() => {
     const canvas = canvasRef.current
     if (canvas) canvas.style.cursor = ''
+    if (interactionMode !== 'erase') eraserPointerRef.current = null
   }, [interactionMode])
 
   useEffect(() => {
@@ -559,6 +563,36 @@ export const EditorCanvas = ({
       clamp,
     )
 
+  const placeEraserCursor = useCallback(
+    (clientX: number, clientY: number) => {
+      const cursor = eraserCursorRef.current
+      const canvas = canvasRef.current
+      const shell = viewportRef.current
+      if (!cursor || !canvas || !shell) return
+      const display = containedRect(canvas.getBoundingClientRect(), width, height)
+      const shellBox = shell.getBoundingClientRect()
+      const diameter = eraserScreenDiameter(eraserSize, width, display.width)
+      cursor.style.visibility = diameter > 0 ? 'visible' : 'hidden'
+      cursor.style.width = `${diameter}px`
+      cursor.style.height = `${diameter}px`
+      cursor.style.left = `${clientX - shellBox.left}px`
+      cursor.style.top = `${clientY - shellBox.top}px`
+    },
+    [eraserSize, height, viewportRef, width],
+  )
+
+  useLayoutEffect(() => {
+    const point = eraserPointerRef.current
+    if (interactionMode !== 'erase' || !point) return
+    placeEraserCursor(point.x, point.y)
+  }, [interactionMode, layoutSize, placeEraserCursor, transform])
+
+  const trackEraserCursor = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    if (interactionMode !== 'erase') return
+    eraserPointerRef.current = { x: event.clientX, y: event.clientY }
+    placeEraserCursor(event.clientX, event.clientY)
+  }
+
   const updateCursor = (
     canvas: HTMLCanvasElement,
     point: Point,
@@ -569,7 +603,7 @@ export const EditorCanvas = ({
       return
     }
     if (interactionMode === 'erase') {
-      canvas.style.cursor = 'crosshair'
+      canvas.style.cursor = 'none'
       return
     }
     if (interactionMode === 'select-region' || regionStartRef.current) {
@@ -610,6 +644,7 @@ export const EditorCanvas = ({
     if (editingLayerId) setEditingLayerId(null)
     if (interactionMode === 'preview') return
     if (interactionMode === 'erase') {
+      trackEraserCursor(event)
       eraserDraftRef.current = [point]
       draw()
       event.currentTarget.setPointerCapture(event.pointerId)
@@ -674,6 +709,7 @@ export const EditorCanvas = ({
   }
 
   const handlePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    trackEraserCursor(event)
     const drag = dragRef.current
     const point = imagePoint(
       event,
@@ -788,11 +824,27 @@ export const EditorCanvas = ({
         setEditingLayerId(clickCandidate.id)
       }
     }
+    if (interactionMode === 'erase') {
+      const box = event.currentTarget.getBoundingClientRect()
+      const inside =
+        event.clientX >= box.left &&
+        event.clientX <= box.right &&
+        event.clientY >= box.top &&
+        event.clientY <= box.bottom
+      if (!inside) {
+        eraserPointerRef.current = null
+        if (eraserCursorRef.current) {
+          eraserCursorRef.current.style.visibility = 'hidden'
+        }
+      }
+    }
     updateCursor(event.currentTarget, point, null)
   }
 
   const handlePointerLeave = (event: React.PointerEvent<HTMLCanvasElement>) => {
-    if (dragRef.current || regionStartRef.current) return
+    if (dragRef.current || regionStartRef.current || eraserDraftRef.current) return
+    eraserPointerRef.current = null
+    if (eraserCursorRef.current) eraserCursorRef.current.style.visibility = 'hidden'
     event.currentTarget.style.cursor = ''
   }
 
@@ -808,7 +860,8 @@ export const EditorCanvas = ({
     <div ref={viewportRef} className="editor-canvas-shell">
       <canvas
         ref={canvasRef}
-        className={`editor-canvas ${interactionMode === 'select-region' ? 'selecting-region' : ''}`}
+        className={`editor-canvas${interactionMode === 'select-region' ? ' selecting-region' : ''}${interactionMode === 'erase' ? ' erasing' : ''}`}
+        onPointerEnter={trackEraserCursor}
         style={{
           ...contentStyle,
           aspectRatio: `${width} / ${height}`,
@@ -821,6 +874,9 @@ export const EditorCanvas = ({
         onPointerCancel={handlePointerUp}
         onPointerLeave={handlePointerLeave}
       />
+      {interactionMode === 'erase' ? (
+        <div ref={eraserCursorRef} className="eraser-cursor" aria-hidden="true" />
+      ) : null}
       {editingLayer && onEditText ? (
         <LayerTextEditor
           layer={editingLayer}

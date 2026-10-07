@@ -3,6 +3,7 @@ import {
   boundsCenter,
   clientPointToImage,
   containedRect,
+  eraserScreenDiameter,
   fittedContainSize,
   fontSizeFromCornerDrag,
   isOnResizeCorner,
@@ -44,6 +45,14 @@ describe('image geometry mapping', () => {
       width: 700 * (1080 / 1920),
       height: 700,
     })
+  })
+
+  it('scales the eraser blob with the displayed image', () => {
+    expect(eraserScreenDiameter(36, 900, 450)).toBe(18)
+    expect(eraserScreenDiameter(36, 900, 900)).toBe(36)
+    expect(eraserScreenDiameter(160, 800, 1600)).toBe(320)
+    expect(eraserScreenDiameter(0, 900, 450)).toBe(0)
+    expect(eraserScreenDiameter(36, 0, 450)).toBe(0)
   })
 
   it('maps a click on letterboxed content to image pixels', () => {

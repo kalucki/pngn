@@ -1,4 +1,4 @@
-import { Select, Slider, Tooltip } from "@mantine/core";
+import { Menu, Select, Slider, Tooltip } from "@mantine/core";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   trackExportFinished,
@@ -65,13 +65,17 @@ import {
   BrushIcon,
   CropIcon,
   DownloadIcon,
+  FlipHorizontalIcon,
+  FlipVerticalIcon,
   EyeIcon,
   HelpCircleIcon,
   ImagePlusIcon,
   DashedBoxIcon,
   PencilIcon,
+  RedoIcon,
   RestartIcon,
   TypeIcon,
+  UndoIcon,
   WandIcon,
 } from "./layout/icons";
 import { EDITOR_PATH, EXPORT_PATH, navigate, usePath } from "./navigation";
@@ -119,6 +123,8 @@ type LayerSelectSource = "sidebar" | "canvas";
 
 type ReconstructionChoice = "auto" | "flat" | NeuralInpaintModel;
 type EditorTool = "select" | "text" | "erase" | "background";
+
+const resizeDebounceMs = 500;
 
 const initialOptions: ProcessingOptions = {
   method: "auto",
@@ -179,19 +185,6 @@ const canvasToPng = (canvas: HTMLCanvasElement) =>
       "image/png",
     );
   });
-
-const blobToDataUrl = (blob: Blob) =>
-  new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(reader.error);
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(blob);
-  });
-
-const dataUrlToFile = async (dataUrl: string, name: string) => {
-  const blob = await fetch(dataUrl).then((response) => response.blob());
-  return new File([blob], name, { type: blob.type || "image/png" });
-};
 
 const blobFromCanvas = (canvas: HTMLCanvasElement) =>
   new Promise<Blob>((resolve, reject) => {
@@ -351,14 +344,24 @@ export const App = () => {
   const [resizeHeight, setResizeHeight] = useState(0);
   const [backgroundColor, setBackgroundColor] = useState("#ffffff");
   const [toolHintHidden, setToolHintHidden] = useState(false);
+  const newImageInputRef = useRef<HTMLInputElement>(null);
   const processingGenerationRef = useRef(0);
   const regionsRef = useRef<ProcessedRegion[]>([]);
   const optionsRef = useRef(options);
   const layersRef = useRef(layers);
   const selectedLayerIdsRef = useRef(selectedLayerIds);
   const urlsRef = useRef(urls);
+  const resultRef = useRef(result);
   const isAddingRegionRef = useRef(isAddingRegion);
   const isProcessingRef = useRef(isProcessing);
+  const resizeTimerRef = useRef<number | null>(null);
+  const pendingResizeRef = useRef<{
+    width: number;
+    height: number;
+    generation: number;
+  } | null>(null);
+  const resizeGenerationRef = useRef(0);
+  const rasterEditGenerationRef = useRef(0);
   const removeLayerChainRef = useRef(Promise.resolve());
   const requestApplyToLayerRef = useRef<(layerId: string) => void>(() => {});
   // Identifies the current file to the processing worker so it can reuse its
@@ -659,10 +662,19 @@ export const App = () => {
     layersRef.current = layers;
     selectedLayerIdsRef.current = selectedLayerIds;
     urlsRef.current = urls;
+    resultRef.current = result;
     isAddingRegionRef.current = isAddingRegion;
     isProcessingRef.current = isProcessing;
     requestApplyToLayerRef.current = requestApplyToLayer;
   });
+
+  useEffect(() => {
+    return () => {
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     warmupProcessingWorker();
@@ -1153,9 +1165,32 @@ export const App = () => {
 
   const applyRasterEdit = async (
     edit: () => Promise<{ url: string; buffer: ArrayBuffer; width: number; height: number }>,
+    resizeGeneration?: number,
   ) => {
-    if (!urls || !result) return;
+    if (!urlsRef.current || !resultRef.current) return;
+    if (resizeGeneration === undefined) {
+      if (resizeTimerRef.current !== null) {
+        window.clearTimeout(resizeTimerRef.current);
+        resizeTimerRef.current = null;
+      }
+      pendingResizeRef.current = null;
+      resizeGenerationRef.current += 1;
+    } else if (resizeGeneration !== resizeGenerationRef.current) {
+      return;
+    }
+    const editGeneration = ++rasterEditGenerationRef.current;
     const edited = await edit();
+    if (editGeneration !== rasterEditGenerationRef.current) {
+      URL.revokeObjectURL(edited.url);
+      return;
+    }
+    if (
+      resizeGeneration !== undefined &&
+      resizeGeneration !== resizeGenerationRef.current
+    ) {
+      URL.revokeObjectURL(edited.url);
+      return;
+    }
     setUrls((current) => (current ? { ...current, clean: edited.url } : current));
     setResult((current) =>
       current
@@ -1207,13 +1242,63 @@ export const App = () => {
     });
   };
 
-  const applyResize = () => {
-    if (!urls || !result || resizeWidth < 1 || resizeHeight < 1) return;
-    void applyRasterEdit(() =>
-      resizeRaster(urls.clean, Math.round(resizeWidth), Math.round(resizeHeight)),
+  const runScheduledResize = (width: number, height: number, generation: number) => {
+    if (generation !== resizeGenerationRef.current) return;
+    const current = resultRef.current;
+    const currentUrls = urlsRef.current;
+    if (!current || !currentUrls) return;
+    const nextWidth = Math.round(width);
+    const nextHeight = Math.round(height);
+    if (
+      nextWidth < 1 ||
+      nextHeight < 1 ||
+      (nextWidth === current.width && nextHeight === current.height)
+    ) {
+      return;
+    }
+    void applyRasterEdit(
+      () => resizeRaster(currentUrls.clean, nextWidth, nextHeight),
+      generation,
     ).catch((error: unknown) => {
       setError(error instanceof Error ? error.message : "Image processing failed.");
     });
+  };
+
+  const scheduleResize = (width: number, height: number) => {
+    if (resizeTimerRef.current !== null) {
+      window.clearTimeout(resizeTimerRef.current);
+      resizeTimerRef.current = null;
+    }
+    const generation = ++resizeGenerationRef.current;
+    if (width < 1 || height < 1) {
+      pendingResizeRef.current = null;
+      return;
+    }
+    pendingResizeRef.current = { width, height, generation };
+    resizeTimerRef.current = window.setTimeout(() => {
+      resizeTimerRef.current = null;
+      pendingResizeRef.current = null;
+      runScheduledResize(width, height, generation);
+    }, resizeDebounceMs);
+  };
+
+  const flushScheduledResize = () => {
+    const pending = pendingResizeRef.current;
+    if (resizeTimerRef.current === null || !pending) return;
+    window.clearTimeout(resizeTimerRef.current);
+    resizeTimerRef.current = null;
+    pendingResizeRef.current = null;
+    runScheduledResize(pending.width, pending.height, pending.generation);
+  };
+
+  const updateResizeDimension = (axis: "width" | "height", raw: string) => {
+    const parsed = raw.trim() === "" ? 0 : Number(raw);
+    const value = Number.isFinite(parsed) ? parsed : 0;
+    const width = axis === "width" ? value : resizeWidth;
+    const height = axis === "height" ? value : resizeHeight;
+    if (axis === "width") setResizeWidth(value);
+    else setResizeHeight(value);
+    scheduleResize(width, height);
   };
 
   const applyBackgroundCutout = () => {
@@ -1234,58 +1319,6 @@ export const App = () => {
     );
   };
 
-  const saveProjectFile = () => {
-    if (!file || !source) return;
-    void (async () => {
-      const clean = urls
-        ? await blobToDataUrl(await fetch(urls.clean).then((response) => response.blob()))
-        : null;
-      const payload = {
-        version: 1,
-        name: file.name,
-        source: {
-          width: source.width,
-          height: source.height,
-          dataUrl: await blobToDataUrl(file),
-        },
-        clean,
-        layers,
-      };
-      const blob = new Blob([JSON.stringify(payload)], {
-        type: "application/json",
-      });
-      downloadFromUrl(URL.createObjectURL(blob), `${file.name.replace(/\.[^.]+$/, "")}.pngn`);
-    })();
-  };
-
-  const loadProjectFile = (projectFile: File | undefined) => {
-    if (!projectFile) return;
-    void (async () => {
-      const payload = JSON.parse(await projectFile.text()) as {
-        name: string;
-        source: { width: number; height: number; dataUrl: string };
-        clean?: string | null;
-        layers?: TextLayer[];
-      };
-      const restored = await dataUrlToFile(payload.source.dataUrl, payload.name);
-      await handleFile(restored, "picker");
-      if (payload.clean) {
-        const cleanFile = await dataUrlToFile(payload.clean, "clean.png");
-        const cleanUrl = URL.createObjectURL(cleanFile);
-        const cleanImage = await cleanFile.arrayBuffer();
-        setUrls({ clean: cleanUrl, mask: cleanUrl });
-        setResult((current) =>
-          current
-            ? { ...current, cleanImage }
-            : current,
-        );
-      }
-      replaceLayers(payload.layers ?? []);
-    })().catch((error: unknown) => {
-      setError(error instanceof Error ? error.message : "Project could not be opened.");
-    });
-  };
-
   const selectEditorTool = (tool: EditorTool) => {
     setActiveTool(tool);
     setSelection(null);
@@ -1302,96 +1335,104 @@ export const App = () => {
 
   const editorMenus = (
     <div className="editor-menu-row" aria-label="Editor menus">
-      <details className="editor-menu">
-        <summary>File</summary>
-        <div className="editor-menu-panel">
-          <label className={`editor-menu-item${isBusy ? " is-disabled" : ""}`}>
-            <ImagePlusIcon />
-            {t("app.newImage")}
-            <input
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              disabled={isBusy}
-              onChange={(event) =>
-                void handleFile(event.target.files?.[0], "picker")
-              }
-            />
-          </label>
-          <label className={`editor-menu-item${isBusy ? " is-disabled" : ""}`}>
-            <ImagePlusIcon />
-            Open project
-            <input
-              type="file"
-              accept=".pngn,application/json"
-              disabled={isBusy}
-              onChange={(event) => loadProjectFile(event.target.files?.[0])}
-            />
-          </label>
-          <button
-            type="button"
-            className="editor-menu-item"
-            disabled={isBusy || !file}
-            onClick={saveProjectFile}
-          >
-            <DownloadIcon />
-            Save project
+      <Menu position="bottom-start" offset={4}>
+        <Menu.Target>
+          <button type="button" className="editor-menu-trigger">
+            File
           </button>
-          <button
-            type="button"
+        </Menu.Target>
+        <Menu.Dropdown className="editor-menu-dropdown">
+          <Menu.Item
             className="editor-menu-item"
+            leftSection={<ImagePlusIcon />}
+            disabled={isBusy}
+            onClick={() => newImageInputRef.current?.click()}
+          >
+            {t("app.newImage")}
+          </Menu.Item>
+          <Menu.Item
+            className="editor-menu-item"
+            leftSection={<RestartIcon />}
             disabled={isBusy}
             onClick={resetToUploadedImage}
           >
-            <RestartIcon />
             {t("app.restart")}
+          </Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
+      <Menu position="bottom-start" offset={4}>
+        <Menu.Target>
+          <button type="button" className="editor-menu-trigger">
+            Export
           </button>
-        </div>
-      </details>
-      <details className="editor-menu">
-        <summary>Export</summary>
-        <div className="editor-menu-panel">
-          <button
-            type="button"
+        </Menu.Target>
+        <Menu.Dropdown className="editor-menu-dropdown">
+          <Menu.Item
             className="editor-menu-item"
+            leftSection={<DownloadIcon />}
             disabled={isBusy || !urls || !result}
             onClick={() => setExportModalOpen(true)}
           >
-            <DownloadIcon />
             {t("app.export")}
-          </button>
-          <button
-            type="button"
-            className="editor-menu-item"
-            disabled={isBusy || !urls || !result}
-            aria-pressed={isExportPreview}
-            onClick={handleToggleExportPreview}
-          >
-            <EyeIcon />
-            {t("app.exportPreview")}
-          </button>
-        </div>
-      </details>
-      <details className="editor-menu">
-        <summary>Edit</summary>
-        <div className="editor-menu-panel">
-          <button
-            type="button"
-            className="editor-menu-item"
-            disabled={isBusy || layerHistory.past.length === 0}
-            onClick={() => dispatchLayerHistory({ type: "undo" })}
-          >
-            Undo
-          </button>
-          <button
-            type="button"
-            className="editor-menu-item"
-            disabled={isBusy || layerHistory.future.length === 0}
-            onClick={() => dispatchLayerHistory({ type: "redo" })}
-          >
-            Redo
-          </button>
-        </div>
-      </details>
+          </Menu.Item>
+        </Menu.Dropdown>
+      </Menu>
+      <input
+        ref={newImageInputRef}
+        className="visually-hidden"
+        tabIndex={-1}
+        aria-hidden="true"
+        type="file"
+        accept="image/png,image/jpeg,image/webp"
+        disabled={isBusy}
+        onChange={(event) => {
+          const nextFile = event.currentTarget.files?.[0];
+          event.currentTarget.value = "";
+          void handleFile(nextFile, "picker");
+        }}
+      />
+      <div className="editor-history">
+        <Tooltip label="Undo" withArrow position="bottom">
+          <span className="editor-history-hit">
+            <button
+              type="button"
+              className="editor-history-button"
+              aria-label="Undo"
+              disabled={isBusy || layerHistory.past.length === 0}
+              onClick={() => dispatchLayerHistory({ type: "undo" })}
+            >
+              <UndoIcon />
+            </button>
+          </span>
+        </Tooltip>
+        <Tooltip label="Redo" withArrow position="bottom">
+          <span className="editor-history-hit">
+            <button
+              type="button"
+              className="editor-history-button"
+              aria-label="Redo"
+              disabled={isBusy || layerHistory.future.length === 0}
+              onClick={() => dispatchLayerHistory({ type: "redo" })}
+            >
+              <RedoIcon />
+            </button>
+          </span>
+        </Tooltip>
+        <Tooltip label={t("app.exportPreview")} withArrow position="bottom">
+          <span className="editor-history-hit">
+            <button
+              type="button"
+              className="editor-history-button editor-preview-toggle"
+              aria-label={t("app.exportPreview")}
+              aria-pressed={isExportPreview}
+              disabled={isBusy || !urls || !result}
+              onClick={handleToggleExportPreview}
+            >
+              <EyeIcon />
+            </button>
+          </span>
+        </Tooltip>
+      </div>
     </div>
   );
 
@@ -1637,39 +1678,67 @@ export const App = () => {
         </label>
       ) : null}
       {urls && result && activeTool === "select" ? (
-        <div className="raster-controls">
-          <button type="button" className="secondary-button" onClick={applyCrop}>
-            Crop to selection
+        <div className="raster-controls crop-controls">
+          <button
+            type="button"
+            className="button-with-icon crop-selected"
+            disabled={!hasValidSelection || isProcessing}
+            onClick={applyCrop}
+          >
+            <CropIcon />
+            Crop selected
           </button>
-          <button type="button" className="secondary-button" onClick={() => applyFlip("horizontal")}>
-            Flip horizontal
-          </button>
-          <button type="button" className="secondary-button" onClick={() => applyFlip("vertical")}>
-            Flip vertical
-          </button>
-          <label>
-            Width
-            <input
-              className="plain-input"
-              type="number"
-              min={1}
-              value={resizeWidth || ""}
-              onChange={(event) => setResizeWidth(Number(event.target.value) || 0)}
-            />
-          </label>
-          <label>
-            Height
-            <input
-              className="plain-input"
-              type="number"
-              min={1}
-              value={resizeHeight || ""}
-              onChange={(event) => setResizeHeight(Number(event.target.value) || 0)}
-            />
-          </label>
-          <button type="button" className="secondary-button" onClick={applyResize}>
-            Resize
-          </button>
+          <div className="crop-flip-row">
+            <span>Flip</span>
+            <div className="flip-buttons" role="group" aria-label="Flip">
+              <button
+                type="button"
+                className="secondary-button"
+                aria-label="Flip horizontal"
+                title="Flip horizontal"
+                disabled={isProcessing}
+                onClick={() => applyFlip("horizontal")}
+              >
+                <FlipHorizontalIcon />
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                aria-label="Flip vertical"
+                title="Flip vertical"
+                disabled={isProcessing}
+                onClick={() => applyFlip("vertical")}
+              >
+                <FlipVerticalIcon />
+              </button>
+            </div>
+          </div>
+          <div className="crop-size">
+            <label>
+              Width
+              <input
+                className="plain-input"
+                type="number"
+                min={1}
+                disabled={isProcessing}
+                value={resizeWidth || ""}
+                onChange={(event) => updateResizeDimension("width", event.target.value)}
+                onBlur={flushScheduledResize}
+              />
+            </label>
+            <label>
+              Height
+              <input
+                className="plain-input"
+                type="number"
+                min={1}
+                disabled={isProcessing}
+                value={resizeHeight || ""}
+                onChange={(event) => updateResizeDimension("height", event.target.value)}
+                onBlur={flushScheduledResize}
+              />
+            </label>
+          </div>
         </div>
       ) : null}
       {urls && result && activeTool === "background" ? (

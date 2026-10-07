@@ -711,50 +711,97 @@ output {
   align-items: center;
 }
 
-.editor-menu {
-  position: relative;
+.editor-history {
+  display: flex;
+  align-items: center;
+  gap: 0.1rem;
 }
 
-.editor-menu summary {
-  min-width: 3.25rem;
-  padding: 0.35rem 0.5rem;
+.editor-history-hit {
+  display: inline-flex;
+}
+
+.editor-history-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
   border-radius: 0.4rem;
+  background: transparent;
   color: var(--text-muted);
-  font-size: 0.78rem;
-  font-weight: 700;
-  line-height: 1;
-  list-style: none;
   cursor: pointer;
 }
 
-.editor-menu summary::-webkit-details-marker {
-  display: none;
-}
-
-.editor-menu[open] summary,
-.editor-menu summary:hover,
-.editor-menu summary:focus-visible {
+.editor-history-button:hover:not(:disabled),
+.editor-history-button:focus-visible {
   background: var(--bg-hover);
   color: var(--text);
   outline: none;
 }
 
-.editor-menu-panel {
-  position: absolute;
-  z-index: 40;
-  inset-block-start: calc(100% + 0.25rem);
-  inset-inline-start: 0;
-  display: none;
-  min-width: 11.5rem;
-  padding: 0.3rem;
-  border: 1px solid var(--border);
-  border-radius: 0.55rem;
-  background: var(--bg-raised);
-  box-shadow: 0 14px 36px rgb(0 0 0 / 0.14);
+.editor-history-button:disabled {
+  pointer-events: none;
+  cursor: not-allowed;
+  opacity: 0.4;
 }
 
-.editor-menu[open] .editor-menu-panel {
-  display: grid;
+.editor-preview-toggle {
+  margin-inline-start: 0.2rem;
+  color: var(--text-faint);
+  background: var(--bg-hover);
+}
+
+.editor-preview-toggle:hover:not(:disabled),
+.editor-preview-toggle:focus-visible {
+  background: var(--bg-active);
+  color: var(--text-muted);
+}
+
+.editor-preview-toggle[aria-pressed="true"] {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.editor-preview-toggle[aria-pressed="true"]:hover:not(:disabled),
+.editor-preview-toggle[aria-pressed="true"]:focus-visible {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.editor-menu-trigger {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  min-width: 3.25rem;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1;
+  text-align: center;
+  cursor: pointer;
+}
+
+.editor-menu-trigger:hover,
+.editor-menu-trigger:focus-visible,
+.editor-menu-trigger[aria-expanded="true"] {
+  background: var(--bg-hover);
+  color: var(--text);
+  outline: none;
+}
+
+.editor-menu-dropdown {
+  min-width: 11.5rem;
+  padding: 0.3rem;
+  border-radius: 0.55rem;
+  background: var(--bg-raised);
 }
 
 .editor-menu-item {
@@ -774,25 +821,22 @@ output {
   cursor: pointer;
 }
 
-.editor-menu-item:hover:not(:disabled):not(.is-disabled),
-.editor-menu-item:focus-visible {
+.editor-menu-item [data-position="left"] {
+  margin-inline-end: 0;
+}
+
+.editor-menu-item:hover:not(:disabled),
+.editor-menu-item:focus-visible,
+.editor-menu-item[data-menu-active]:not(:disabled) {
   background: var(--bg-hover);
+  color: var(--text);
   outline: none;
 }
 
 .editor-menu-item:disabled,
-.editor-menu-item.is-disabled {
+.editor-menu-item[data-disabled] {
   cursor: not-allowed;
   opacity: 0.45;
-}
-
-.editor-menu-item input[type="file"] {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  opacity: 0;
-  pointer-events: none;
 }
 
 .layers-panel {
@@ -2502,6 +2546,61 @@ html.js #seo-prerender {
   gap: 0.45rem;
 }
 
+.crop-controls {
+  gap: 0.7rem;
+}
+
+.crop-selected {
+  width: 100%;
+}
+
+.crop-flip-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.flip-buttons {
+  display: inline-flex;
+  border: 1px solid var(--border-strong);
+  border-radius: 0.4rem;
+  overflow: hidden;
+  background: var(--bg-raised);
+}
+
+.raster-controls .flip-buttons .secondary-button {
+  display: inline-grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.raster-controls .flip-buttons .secondary-button + .secondary-button {
+  border-inline-start: 1px solid var(--border);
+}
+
+.raster-controls .flip-buttons .secondary-button:hover {
+  border-color: transparent;
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.crop-size {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+}
+
 .history-controls {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -2721,6 +2820,21 @@ html.js #seo-prerender {
   cursor: crosshair;
 }
 
+.editor-canvas.erasing {
+  cursor: none;
+}
+
+.eraser-cursor {
+  position: absolute;
+  z-index: 3;
+  border-radius: 50%;
+  pointer-events: none;
+  visibility: hidden;
+  background: rgb(255 255 255 / 0.42);
+  box-shadow: inset 0 0 0 1.5px rgb(17 17 17 / 0.88);
+  transform: translate(-50%, -50%);
+}
+
 .layer-text-overlay {
   position: absolute;
   z-index: 1;
@@ -2848,11 +2962,6 @@ html.js #seo-prerender {
     padding-bottom: 0.05rem;
   }
 
-  .editor-menu {
-    flex: 0 0 auto;
-  }
-
-
   .layers-panel {
     flex: 0 0 auto;
     overflow: visible;
@@ -2974,5 +3083,9 @@ html.js #seo-prerender {
 .mantine-Combobox-dropdown {
   border: 1px solid var(--border);
   box-shadow: 0 10px 28px rgb(0 0 0 / 0.1);
+}
+
+.editor-menu-dropdown {
+  box-shadow: 0 14px 36px rgb(0 0 0 / 0.14);
 }
 
