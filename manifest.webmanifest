@@ -1,0 +1,16 @@
+{
+  "name": "pngn",
+  "short_name": "pngn",
+  "description": "Free browser image editor that works locally.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f6f3",
+  "theme_color": "#f7f6f3",
+  "icons": [
+    {
+      "src": "/favicon-64.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    }
+  ]
+}
